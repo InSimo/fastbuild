@@ -476,7 +476,9 @@ bool LinkerNode::BuildArgs( Args & fullArgs ) const
     }
 
     // Handle all the special needs of args
-    if ( fullArgs.Finalize( m_Linker, GetName(), CanUseResponseFile() ) == false )
+    bool canUseResponseFile = CanUseResponseFile();
+    int keepFirstArgs = GetFlag(LINK_FLAG_MSVC) ? 8 : 0;
+    if ( fullArgs.Finalize( m_Linker, GetName(), canUseResponseFile, keepFirstArgs ) == false )
     {
         return false; // Finalize will have emitted an error
     }
