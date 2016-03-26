@@ -32,7 +32,9 @@ DLL( 'Plugin-DLL' )
 {
 #if __WINDOWS__
 	.LinkerOptions		+ ' /DLL'
-						+ ' LIBCMT.lib'
+										+ ' ucrt.lib'
+										+ ' vcruntime.lib'
+										+ ' msvcrt.lib'
 						+ ' OLDNAMES.LIB'
 						+ ' kernel32.lib'
 						+ ' /LIBPATH:"$VisualStudioPath$\VC\lib\amd64"'
