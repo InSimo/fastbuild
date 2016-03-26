@@ -23,12 +23,12 @@ public:
 	~ResponseFile();
 
 	bool Create( const Args & args );
-	bool Create( const AString & contents );
+	bool Create( const AString & contents, int start = 0 );
 	const AString & GetResponseFilePath() const { return m_ResponseFilePath; }
 
 	void SetEscapeSlashes() { m_EscapeSlashes = true; }
 private:
-	bool CreateInternal( const AString & contents );
+	bool CreateInternal( const AString & contents, int start = 0 );
 
 	FileStream m_File;
 	AStackString<> m_ResponseFilePath;
