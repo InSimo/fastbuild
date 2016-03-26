@@ -600,7 +600,8 @@ void Server::FinalizeCompletedJobs()
 	PROFILE_FUNCTION
 
 	JobQueueRemote & jcr = JobQueueRemote::Get();
-	while ( Job * job = jcr.GetCompletedJob() )
+    Job * job = nullptr;
+	while ((job = jcr.GetCompletedJob()) != nullptr)
 	{
 		// get associated connection
 		ClientState * cs = (ClientState *)job->GetUserData();
