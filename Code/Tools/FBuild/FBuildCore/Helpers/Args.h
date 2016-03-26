@@ -36,7 +36,7 @@ public:
     void SetEscapeSlashesInResponseFile() { ASSERT( !m_Finalized ); m_ResponseFile.SetEscapeSlashes(); }
 
     // Do final fixups and create response file if needed/supported
-    bool Finalize( const AString & exe, const AString & nodeNameForError, bool canUseResponseFile );
+    bool Finalize( const AString & exe, const AString & nodeNameForError, bool canUseResponseFile, int keepFirstArgs = 0 );
 
     // After finalization, access args
     const AString& GetRawArgs() const   { return m_Args; }

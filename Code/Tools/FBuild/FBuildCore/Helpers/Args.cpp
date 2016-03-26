@@ -87,7 +87,7 @@ void Args::Clear()
 
 // Finalize
 //------------------------------------------------------------------------------
-bool Args::Finalize( const AString & exe, const AString & nodeNameForError, bool canUseResponseFile )
+bool Args::Finalize( const AString & exe, const AString & nodeNameForError, bool canUseResponseFile, int keepFirstArgs )
 {
     ASSERT( !m_Finalized );
 
@@ -121,13 +121,29 @@ bool Args::Finalize( const AString & exe, const AString & nodeNameForError, bool
         // Args are too long. Can we cope using a Response File?
         if ( canUseResponseFile )
         {
+            // Make sure keepFirstArgs is less than total number of arguments, and their size is not too large
+            if (keepFirstArgs > 0)
+            {
+                if (keepFirstArgs >= m_DelimiterIndices.GetSize())
+                {
+                    keepFirstArgs = (int)m_DelimiterIndices.GetSize() - 1;
+                }
+                while (keepFirstArgs > 0 && m_DelimiterIndices[keepFirstArgs] + exeLen + extraLen >= argLimit)
+                {
+                    --keepFirstArgs;
+                }
+            }
+
             // Handle per-line limit within response files (e.g. link.exe)
             #if defined( __WINDOWS__ )
                 if ( argLen >= 131071 ) // From LNK1170
                 {
                     // Change spaces to carriage returns
-                    for ( uint32_t i : m_DelimiterIndices )
+                    //for ( uint32_t i : m_DelimiterIndices )
+                    //{
+                    for (auto it = m_DelimiterIndices.begin() + (keepFirstArgs > 0 ? keepFirstArgs + 1 : 0); it != m_DelimiterIndices.end(); ++it)
                     {
+                        uint32_t i = *it;
                         ASSERT( m_Args[ i ] == ' ' );
                         m_Args[ i ] = '\n';
                     }
@@ -138,14 +154,24 @@ bool Args::Finalize( const AString & exe, const AString & nodeNameForError, bool
                 m_Finalized = true;
             #endif
 
+            // start points to the first character from m_Args to write to the response file
+            int start = (keepFirstArgs > 0 ? m_DelimiterIndices[keepFirstArgs] + 1 : 0);
             // Write args to response file
             {
                 PROFILE_SECTION( "CreateResponseFile" )
-                m_ResponseFile.Create( *this );
+                m_ResponseFile.Create( m_Args, start );
             }
 
             // Create new args referencing response file
-            m_ResponseFileArgs = "@\"";
+            if (start > 0) // we need to preserve the first few arguments
+            {
+                m_ResponseFileArgs.Assign(m_Args.Get(), m_Args.Get() + start);
+                m_ResponseFileArgs += "@\"";
+            }
+            else
+            {
+                m_ResponseFileArgs = "@\"";
+            }
             m_ResponseFileArgs += m_ResponseFile.GetResponseFilePath();
             m_ResponseFileArgs += "\"";
 
@@ -159,6 +185,7 @@ bool Args::Finalize( const AString & exe, const AString & nodeNameForError, bool
         (void)exe;
         (void)nodeNameForError;
         (void)canUseResponseFile;
+        (void)keepFirstArgs;
         // TODO:LINUX Difficult to reliably determine this due to complex interaction with environment
         #if defined( ASSERTS_ENABLED )
             m_Finalized = true;

@@ -40,16 +40,16 @@ bool ResponseFile::Create( const Args & args )
 
 // Create
 //------------------------------------------------------------------------------
-bool ResponseFile::Create( const AString & contents )
+bool ResponseFile::Create( const AString & contents, int start )
 {
     if ( m_EscapeSlashes )
     {
         AStackString< 1024 > fixed;
-        if ( contents.GetLength() > 512 )
+        if ( contents.GetLength()-start > 512 )
         {
-            fixed.SetReserved( contents.GetLength() * 2 );
+            fixed.SetReserved( (contents.GetLength()-start) * 2 );
         }
-        const char * it = contents.Get();
+        const char * it = contents.Get() + start;
         const char * end = contents.GetEnd();
         char * dst = fixed.Get();
         while ( it != end )
@@ -71,12 +71,12 @@ bool ResponseFile::Create( const AString & contents )
         return CreateInternal( fixed );
     }
 
-    return CreateInternal( contents );
+    return CreateInternal( contents, start );
 }
 
 // CreateInternal
 //------------------------------------------------------------------------------
-bool ResponseFile::CreateInternal( const AString & contents )
+bool ResponseFile::CreateInternal( const AString & contents, int start )
 {
     // store in tmp folder, and give back to user
     WorkerThread::CreateTempFilePath( "args.rsp", m_ResponseFilePath );
@@ -96,7 +96,7 @@ bool ResponseFile::CreateInternal( const AString & contents )
         }
     }
 
-    bool ok = ( m_File.Write( contents.Get(), contents.GetLength() ) == contents.GetLength() );
+    bool ok = ( m_File.Write( contents.Get() + start, contents.GetLength() - start ) == contents.GetLength() - start );
     if ( !ok )
     {
         FLOG_ERROR( "Failed to write response file '%s'", m_ResponseFilePath.Get() );
