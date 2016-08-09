@@ -24,7 +24,8 @@ public:
 						const AString & workingDir,
 						int32_t expectedReturnCode,
 						const Dependencies & preBuildDependencies,
-						bool useStdOutAsOutput );
+						bool useStdOutAsOutput,
+						bool alwaysRun );
 	virtual ~ExecNode();
 
 	static inline Node::Type GetTypeS() { return Node::EXEC_NODE; }
@@ -32,6 +33,7 @@ public:
 	static Node * Load( NodeGraph & nodeGraph, IOStream & stream );
 	virtual void Save( IOStream & stream ) const override;
 private:
+	virtual bool DetermineNeedToBuild( bool forceClean ) const override;
 	virtual BuildResult DoBuild( Job * job ) override;
 
 	void GetFullArgs(AString & fullArgs) const;
@@ -45,6 +47,7 @@ private:
 	AString		m_WorkingDir;
 	int32_t		m_ExpectedReturnCode;
 	bool		m_UseStdOutAsOutput;
+	bool		m_AlwaysRun;
 };
 
 //------------------------------------------------------------------------------

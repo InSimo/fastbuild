@@ -134,7 +134,7 @@ void TestGraph::TestNodeTypes() const
 		Dependencies empty;
 		Dependencies inputs;
 		inputs.Append( Dependency( fn ) );
-		Node * n = ng.CreateExecNode( AStackString<>( "dst" ), inputs, fn, AStackString<>( "args" ), AStackString<>( "workingDir" ), 0, empty, false );
+		Node * n = ng.CreateExecNode( AStackString<>( "dst" ), inputs, fn, AStackString<>( "args" ), AStackString<>( "workingDir" ), 0, empty, false, false );
 		TEST_ASSERT( n->GetType() == Node::EXEC_NODE );
 		TEST_ASSERT( ExecNode::GetTypeS() == Node::EXEC_NODE);
 		TEST_ASSERT( AStackString<>( "Exec" ) == n->GetTypeName() );

@@ -54,7 +54,7 @@ public:
 	}
 	inline ~NodeGraphHeader() {}
 
-	enum { NODE_GRAPH_CURRENT_VERSION = 85 };
+	enum { NODE_GRAPH_CURRENT_VERSION = 86 };
 
 	bool IsValid() const
 	{
@@ -111,7 +111,8 @@ public:
 							   const AString & workingDir,
 							   int32_t expectedReturnCode,
 							   const Dependencies & preBuildDependencies,
-							   bool useStdOutAsOutput );
+							   bool useStdOutAsOutput,
+							   bool alwaysRun );
 	FileNode * CreateFileNode( const AString & fileName, bool cleanPath = true );
 	DirectoryListNode * CreateDirectoryListNode( const AString & name,
 												 const AString & path,

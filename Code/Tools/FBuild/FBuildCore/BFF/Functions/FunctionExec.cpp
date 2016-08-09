@@ -36,12 +36,14 @@ FunctionExec::FunctionExec()
 	const BFFVariable * workingDirV;
 	int32_t expectedReturnCode;
 	bool useStdOutAsOutput;
+	bool alwaysRun;
 	if ( !GetString( funcStartIter, outputV,		".ExecOutput", true ) ||
 		 !GetString( funcStartIter, executableV,	".ExecExecutable", true ) ||
 		 !GetString( funcStartIter, argsV,			".ExecArguments" ) ||
 		 !GetString( funcStartIter, workingDirV,	".ExecWorkingDir" ) ||
 		 !GetInt( funcStartIter, expectedReturnCode, ".ExecReturnCode", 0, false ) ||
-		 !GetBool( funcStartIter, useStdOutAsOutput, ".ExecUseStdOutAsOutput", false, false))
+		 !GetBool( funcStartIter, useStdOutAsOutput, ".ExecUseStdOutAsOutput", false, false) ||
+		 !GetBool( funcStartIter, alwaysRun, ".ExecAlwaysRun", false, false))
 	{
 		return false;
 	}
@@ -107,7 +109,8 @@ FunctionExec::FunctionExec()
 										   workingDir, 
 										   expectedReturnCode,
 										   preBuildDependencies,
-										   useStdOutAsOutput);
+										   useStdOutAsOutput,
+										   alwaysRun);
 	
 	return ProcessAlias( nodeGraph, funcStartIter, outputNode );
 }

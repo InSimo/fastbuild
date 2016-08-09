@@ -26,7 +26,8 @@ ExecNode::ExecNode( const AString & dstFileName,
 						const AString & workingDir,
 						int32_t expectedReturnCode,
 						const Dependencies & preBuildDependencies,
-						bool useStdOutAsOutput )
+						bool useStdOutAsOutput,
+						bool alwaysRun )
 : FileNode( dstFileName, Node::FLAG_NONE )
 , m_InputFiles( inputFiles )
 , m_Executable( executable )
@@ -34,6 +35,7 @@ ExecNode::ExecNode( const AString & dstFileName,
 , m_WorkingDir( workingDir )
 , m_ExpectedReturnCode( expectedReturnCode )
 , m_UseStdOutAsOutput( useStdOutAsOutput )
+, m_AlwaysRun( alwaysRun )
 {
 	ASSERT( executable );
 	m_StaticDependencies.SetCapacity( m_InputFiles.GetSize() + 1 );
@@ -48,6 +50,14 @@ ExecNode::ExecNode( const AString & dstFileName,
 //------------------------------------------------------------------------------
 ExecNode::~ExecNode()
 {
+}
+
+// DetermineNeedToBuild
+//------------------------------------------------------------------------------
+/*virtual*/ bool ExecNode::DetermineNeedToBuild( bool forceClean ) const
+{
+	if (m_AlwaysRun) return true;
+	return FileNode::DetermineNeedToBuild( forceClean );
 }
 
 // DoBuild
@@ -127,6 +137,7 @@ ExecNode::~ExecNode()
 	NODE_LOAD( int32_t,			expectedReturnCode );
 	NODE_LOAD_DEPS( 0,			preBuildDependencies );
 	NODE_LOAD( bool,			useStdOutAsOutput);
+	NODE_LOAD( bool,			alwaysRun);
 
 	Node * execNode = nodeGraph.FindNode( executable );
 	ASSERT( execNode ); // load/save logic should ensure the src was saved first
@@ -138,7 +149,8 @@ ExecNode::~ExecNode()
 								  workingDir,
 								  expectedReturnCode,
 								  preBuildDependencies,
-								  useStdOutAsOutput );
+								  useStdOutAsOutput ,
+								  alwaysRun );
 	ASSERT( n );
 
 	return n;
@@ -156,6 +168,7 @@ ExecNode::~ExecNode()
 	NODE_SAVE( m_ExpectedReturnCode );
 	NODE_SAVE_DEPS( m_PreBuildDependencies );
 	NODE_SAVE( m_UseStdOutAsOutput );
+	NODE_SAVE( m_AlwaysRun );
 }
 
 // EmitCompilationMessage
