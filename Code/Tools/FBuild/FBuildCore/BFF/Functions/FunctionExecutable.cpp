@@ -163,8 +163,16 @@ FunctionExecutable::FunctionExecutable()
 		flags |= LinkerNode::LINK_OBJECTS;
 	}
 
+	// Get additional inputs
+	Dependencies otherInputs;
+	if (!GetNodeList(nodeGraph, funcStartIter, ".LinkerOtherInputs", otherInputs, false))
+	{
+		return false; // GetNodeList will have emitted error
+	}
+
 	// get inputs not passed through 'LibraryNodes' (i.e. directly specified on the cmd line)
 	Dependencies otherLibraryNodes( 64, true );
+	otherLibraryNodes.Append(otherInputs);
 	if ( ( flags & ( LinkerNode::LINK_FLAG_MSVC | LinkerNode::LINK_FLAG_GCC | LinkerNode::LINK_FLAG_SNC | LinkerNode::LINK_FLAG_ORBIS_LD | LinkerNode::LINK_FLAG_GREENHILLS_ELXR | LinkerNode::LINK_FLAG_CODEWARRIOR_LD ) ) != 0 )
 	{
 		const bool msvcStyle = ( ( flags & LinkerNode::LINK_FLAG_MSVC ) == LinkerNode::LINK_FLAG_MSVC );
