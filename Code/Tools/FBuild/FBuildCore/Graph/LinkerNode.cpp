@@ -38,6 +38,7 @@ REFLECT_NODE_BEGIN( LinkerNode, Node, MetaName( "LinkerOutput" ) + MetaFile() )
     REFLECT( m_LinkerLinkObjects,               "LinkerLinkObjects",            MetaOptional() )
     REFLECT( m_LinkerStampExe,                  "LinkerStampExe",               MetaOptional() + MetaFile() )
     REFLECT( m_LinkerStampExeArgs,              "LinkerStampExeArgs",           MetaOptional() )
+    REFLECT_ARRAY( m_LinkerOtherInputs,         "LinkerOtherInputs",            MetaOptional() + MetaFile() )
     REFLECT_ARRAY( m_PreBuildDependencyNames,   "PreBuildDependencies",         MetaOptional() + MetaFile() + MetaAllowNonFile() )
     REFLECT_ARRAY( m_Environment,               "Environment",                  MetaOptional() )
 
@@ -116,8 +117,16 @@ LinkerNode::LinkerNode()
         return false; // GetNodeList will have emitted error
     }
 
+    // Get additional inputs
+    Dependencies otherInputs;
+    if ( !Function::GetNodeList( nodeGraph, iter, function, ".LinkerOtherInputs", m_LinkerOtherInputs, otherInputs) )
+    {
+        return false; // GetNodeList will have emitted error
+    }
+
     // get inputs not passed through 'LibraryNodes' (i.e. directly specified on the cmd line)
     Dependencies otherLibraryNodes( 64, true );
+    otherLibraryNodes.Append(otherInputs);
     if ( ( m_Flags & ( LinkerNode::LINK_FLAG_MSVC | LinkerNode::LINK_FLAG_GCC | LinkerNode::LINK_FLAG_SNC | LinkerNode::LINK_FLAG_ORBIS_LD | LinkerNode::LINK_FLAG_GREENHILLS_ELXR | LinkerNode::LINK_FLAG_CODEWARRIOR_LD ) ) != 0 )
     {
         const bool msvcStyle = ( ( m_Flags & LinkerNode::LINK_FLAG_MSVC ) == LinkerNode::LINK_FLAG_MSVC );

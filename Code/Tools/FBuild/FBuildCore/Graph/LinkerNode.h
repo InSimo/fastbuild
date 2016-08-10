@@ -94,6 +94,7 @@ protected:
     bool                m_LinkerLinkObjects             = false;
     AString             m_LinkerStampExe;
     AString             m_LinkerStampExeArgs;
+    Array< AString >    m_LinkerOtherInputs;
     Array< AString >    m_PreBuildDependencyNames;
     Array< AString >    m_Environment;
 
