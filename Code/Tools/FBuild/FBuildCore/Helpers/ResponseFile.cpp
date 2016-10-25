@@ -65,7 +65,7 @@ bool ResponseFile::Create( const AString & contents, int start )
 			else
 			{
 				*dst = c; dst++;
-			}			
+            }
 			it++;
 		}
 		fixed.SetLength( (uint32_t)( dst - fixed.Get() ) );

@@ -10,9 +10,9 @@
         // Common options
         .UnityInputPath             = '$ProjectPath$\'
         .UnityOutputPath            = '$OutputBase$\Unity\$ProjectPath$\'
-        
+
         // Ignore test data (some of which is code)
-        .UnityInputExcludePath      = 'Tools\FBuild\FBuildTest\Data\'        
+        .UnityInputExcludePath      = 'Tools\FBuild\FBuildTest\Data\'
 
         // Windows
         Unity( '$ProjectName$-Unity-Windows' )
@@ -69,11 +69,11 @@
 										+ ' User32.lib'
 		}
 		Alias( '$ProjectName$-$Platform$-$Config$' ) { .Targets = '$ProjectName$-Exe-$Platform$-$Config$' }
-	
+
 		// Run Test
 		Test( '$ProjectName$-RunTest-$Platform$-$Config$' )
 		{
-			.TestExecutable				= '$ProjectName$-Exe-$Platform$-$Config$'			
+            .TestExecutable             = '$ProjectName$-Exe-$Platform$-$Config$'
 			.TestOutput					= '$OutputBase$/$ProjectPath$/TestOutput.txt'
 			.TestWorkingDir				= 'Tools/FBuild/FBuildTest'
 		}
@@ -120,7 +120,7 @@
         // Executable
         Executable( '$ProjectName$-Exe-$Platform$-$Config$' )
         {
-            .Libraries                  = { 
+            .Libraries                  = {
                                             'FBuildTest-Lib-$Platform$-$Config$',
                                             'FBuildCore-Lib-$Platform$-$Config$',
                                             'TestFrameWork-Lib-$Platform$-$Config$',
@@ -131,11 +131,11 @@
             .LinkerOptions              + ' -pthread -ldl -lrt'
         }
         Alias( '$ProjectName$-$Platform$-$Config$' ) { .Targets = '$ProjectName$-Exe-$Platform$-$Config$' }
-    
+
         // Run Test
         Test( '$ProjectName$-RunTest-$Platform$-$Config$' )
         {
-            .TestExecutable             = '$ProjectName$-Exe-$Platform$-$Config$'           
+            .TestExecutable             = '$ProjectName$-Exe-$Platform$-$Config$'
             .TestOutput                 = '$OutputBase$/$ProjectPath$/TestOutput.txt'
             .TestWorkingDir             = 'Tools/FBuild/FBuildTest'
         }
@@ -226,7 +226,7 @@
 									.ProjectX64Debug, .ProjectX64Profile, .ProjectX64Release,
 									.ProjectX86ClangDebug, .ProjectX86ClangProfile, .ProjectX86ClangRelease }
 	}
-    
+
    	// XCode Project Generation
 	//--------------------------------------------------------------------------
 	XCodeProject( '$ProjectName$-xcodeproj' )
@@ -234,12 +234,12 @@
 		.ProjectOutput 				= '../tmp/XCode/Projects/1_Test/$ProjectName$.xcodeproj/project.pbxproj'
 		.ProjectInputPaths			= '$ProjectPath$/'
 		.ProjectBasePath			= '$ProjectPath$/'
-		
-		.XCodeBuildWorkingDir		= '../../../../Code/'		
-		
+
+        .XCodeBuildWorkingDir       = '../../../../Code/'
+
 		.ProjectOSXDebug 		= [ .Config = 'Debug' 	.Target = '$ProjectName$-x64OSX-Debug' ]
 		.ProjectOSXProfile 		= [ .Config = 'Profile' .Target = '$ProjectName$-x64OSX-Profile' ]
-		.ProjectOSXRelease 		= [ .Config = 'Release' .Target = '$ProjectName$-x64OSX-Release' ]		
-		.ProjectConfigs 		= { .ProjectOSXDebug, .ProjectOSXProfile, .ProjectOSXRelease }	
-	} 
+        .ProjectOSXRelease      = [ .Config = 'Release' .Target = '$ProjectName$-x64OSX-Release' ]
+        .ProjectConfigs         = { .ProjectOSXDebug, .ProjectOSXProfile, .ProjectOSXRelease }
+    }
 }

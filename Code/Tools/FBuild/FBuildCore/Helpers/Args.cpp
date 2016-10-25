@@ -32,9 +32,7 @@ Args::Args()
 
 // DESTRUCTOR
 //------------------------------------------------------------------------------
-Args::~Args()
-{
-}
+Args::~Args() = default;
 
 // operator += (char *)
 //------------------------------------------------------------------------------
@@ -101,15 +99,15 @@ bool Args::Finalize( const AString & exe, const AString & nodeNameForError, bool
 			// https://msdn.microsoft.com/en-us/library/windows/desktop/ms682425(v=vs.85).aspx
 			const uint32_t argLimit( 32767 );
 		#elif defined( __OSX__ )
-			const uint32_t argLimit( ARG_MAX - 1 );		
+            const uint32_t argLimit( ARG_MAX - 1 );
 		#endif
-	
+
 		// Calculate final length of args (including exe name)
 		const uint32_t exeLen = exe.GetLength();
 		const uint32_t extraLen = 3; // quotes around exe name and space
 		const uint32_t argLen = m_Args.GetLength();
 
-		// We need to consider the executable, quotes around the exe and a space 
+        // We need to consider the executable, quotes around the exe and a space
 		// as well as the args: "%exe%" %args%
 		const uint32_t totalLen = ( argLen + exeLen + extraLen );
 
@@ -186,7 +184,10 @@ bool Args::Finalize( const AString & exe, const AString & nodeNameForError, bool
 		FLOG_ERROR( "FBuild: Error: Command Line Limit Exceeded (len: %u, limit: %u) '%s'\n", argLen, argLimit, nodeNameForError.Get() );
 		return false;
 	#elif defined( __LINUX__ )
-		// TODO:LINUX Difficult to reliable determine this due to complex interaction with environment
+        (void)exe;
+        (void)nodeNameForError;
+        (void)canUseResponseFile;
+        // TODO:LINUX Difficult to reliably determine this due to complex interaction with environment
 		#if defined( ASSERTS_ENABLED )
 			m_Finalized = true;
 		#endif

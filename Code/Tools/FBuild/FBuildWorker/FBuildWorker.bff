@@ -120,7 +120,7 @@
         // Executable
         Executable( '$ProjectName$-Exe-$Platform$-$Config$' )
         {
-            .Libraries                  = { 
+            .Libraries                  = {
                                             'FBuildWorker-Lib-$Platform$-$Config$',
                                             'FBuildCore-Lib-$Platform$-$Config$',
 											'OSUI-Lib-$Platform$-$Config$'
@@ -209,18 +209,18 @@
 									.ProjectX64Debug, .ProjectX64Profile, .ProjectX64Release,
 									.ProjectX86ClangDebug, .ProjectX86ClangProfile, .ProjectX86ClangRelease }
 	}
-	
+
 	XCodeProject( '$ProjectName$-xcodeproj' )
 	{
 		.ProjectOutput 				= '../tmp/XCode/Projects/3_Apps/$ProjectName$.xcodeproj/project.pbxproj'
 		.ProjectInputPaths			= '$ProjectPath$/'
 		.ProjectBasePath			= '$ProjectPath$/'
-		
-		.XCodeBuildWorkingDir		= '../../../../Code/'		
-		
+
+        .XCodeBuildWorkingDir       = '../../../../Code/'
+
 		.ProjectOSXDebug 		= [ .Config = 'Debug' 	.Target = '$ProjectName$-x64OSX-Debug' ]
 		.ProjectOSXProfile 		= [ .Config = 'Profile' .Target = '$ProjectName$-x64OSX-Profile' ]
-		.ProjectOSXRelease 		= [ .Config = 'Release' .Target = '$ProjectName$-x64OSX-Release' ]		
+        .ProjectOSXRelease      = [ .Config = 'Release' .Target = '$ProjectName$-x64OSX-Release' ]
 		.ProjectConfigs 		= { .ProjectOSXDebug, .ProjectOSXProfile, .ProjectOSXRelease }
 	}
 }

@@ -91,7 +91,7 @@ bool Server::IsSynchingTool( AString & statusStr ) const
 			bool synching = ( *it )->GetSynchronizationStatus( synchDone, synchTotal );
 			if ( synching )
 			{
-				statusStr.Format( "Synchronizing Compiler %2.1f / %2.1f MiB\n", 
+                statusStr.Format( "Synchronizing Compiler %2.1f / %2.1f MiB\n",
 									(float)synchDone / (float)MEGABYTE,
 									(float)synchTotal / (float)MEGABYTE );
 				return true;
@@ -207,7 +207,7 @@ bool Server::IsSynchingTool( AString & statusStr ) const
 	if ( cs->m_CurrentMessage == nullptr )
 	{
 		// message
-		cs->m_CurrentMessage = reinterpret_cast< const Protocol::IMessage * >( data );
+        cs->m_CurrentMessage = static_cast< const Protocol::IMessage * >( data );
 		if ( cs->m_CurrentMessage->HasPayload() )
 		{
 			return;
@@ -233,7 +233,7 @@ bool Server::IsSynchingTool( AString & statusStr ) const
 		case Protocol::MSG_CONNECTION:
 		{
 			const Protocol::MsgConnection * msg = static_cast< const Protocol::MsgConnection * >( imsg );
-			Process( connection, msg ); 
+            Process( connection, msg );
 			break;
 		}
 		case Protocol::MSG_STATUS:
@@ -340,7 +340,7 @@ void Server::Process( const ConnectionInfo * connection, const Protocol::MsgJob 
 	Job * job = FNEW( Job( ms ) );
 	job->SetUserData( cs );
 
-	// 
+    //
 	const uint64_t toolId = msg->GetToolId();
 	ASSERT( toolId );
 
@@ -355,10 +355,10 @@ void Server::Process( const ConnectionInfo * connection, const Protocol::MsgJob 
 		{
 			// we have all the files - we can do the job
 			JobQueueRemote::Get().QueueJob( job );
-			return;		
+            return;
 		}
 
-		// missing some files - request them		
+        // missing some files - request them
 		RequestMissingFiles( connection, manifest );
 	}
 	else
@@ -576,7 +576,7 @@ void Server::FindNeedyClients()
 		    MutexHolder mh2( cs->m_Mutex );
 
             size_t reservedJobs = cs->m_NumJobsRequested;
-    
+
             if ( reservedJobs >= cs->m_NumJobsAvailable )
     		{
     		    continue; // we've maxed out the requests to this worker

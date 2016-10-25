@@ -15,8 +15,8 @@ Using( .StandardEnvironment )
 
 // Override for different relative VisualStudioPath
 #if __WINDOWS__
-	Settings		
-	{ 
+    Settings
+    {
 		#import TMP
 		.Environment	= { "PATH=$VisualStudioPath$\Common7\IDE\",
                             "TMP=$TMP$",
@@ -122,12 +122,12 @@ Using( .StandardEnvironment )
                             .ExtraOptions = ' -fexceptions'
                         #endif
 ]
-.Libs				= { 
+.Libs               = {
 						.LZ4Lib
-						.CoreLib, 
-						.CoreTestLib, 
-						.FBuildCoreLib, 
-						.FBuildAppLib, 
+                        .CoreLib,
+                        .CoreTestLib,
+                        .FBuildCoreLib,
+                        .FBuildAppLib,
 						.FBuildTestLib
 						.TestFrameworkLib
 					  }
@@ -196,16 +196,16 @@ ForEach( .Config			in .Configs,
         #endif
         .LinkerOptions      + .ExtraLinkerOptions
 		.Libraries			= { "CoreTest-$Config$",
-                                "Core-$Config$", 
+                                "Core-$Config$",
 								"TestFramework-$Config$"
-								"LZ4-$Config$" }								
+                                "LZ4-$Config$" }
 	}
 
 	Executable
 	{
 		.LinkerOutput		= "$OutputBase$\Tools\FBuild\FBuildApp\FBuild.exe"
 		#if __WINDOWS__
-			.LinkerOptions		+ " /PDB:^"$OutputBase$\Tools\FBuild\FBuildApp\FBuild.pdb^""            
+            .LinkerOptions      + " /PDB:^"$OutputBase$\Tools\FBuild\FBuildApp\FBuild.pdb^""
 		#endif
         #if __LINUX__
             .LinkerOptions      + " -pthread -ldl -lrt"
@@ -213,8 +213,8 @@ ForEach( .Config			in .Configs,
         .LinkerOptions      + .ExtraLinkerOptions
 		.Libraries			= { "FBuildApp-$Config$",
 								"FBuildCore-$Config$",
-                                "Core-$Config$", 
-								"LZ4-$Config$" }								
+                                "Core-$Config$",
+                                "LZ4-$Config$" }
 	}
 
 	Executable
@@ -227,11 +227,11 @@ ForEach( .Config			in .Configs,
             .LinkerOptions      + " -pthread -ldl -lrt"
         #endif
         .LinkerOptions      + .ExtraLinkerOptions
-		.Libraries			= { 
+        .Libraries          = {
                                 "FBuildTest-$Config$",
 								"FBuildCore-$Config$",
 								"TestFramework-$Config$",
-                                "Core-$Config$", 
+                                "Core-$Config$",
 								"LZ4-$Config$" }
 	}
 

@@ -1,8 +1,6 @@
 // NodeGraph.h - interface to the dependency graph
 //------------------------------------------------------------------------------
 #pragma once
-#ifndef FBUILD_GRAPH_NODEGRAPH_H
-#define FBUILD_GRAPH_NODEGRAPH_H
 
 // Includes
 //------------------------------------------------------------------------------
@@ -52,9 +50,9 @@ public:
 		m_Identifier[ 2 ] = 'D';
 		m_Version = NODE_GRAPH_CURRENT_VERSION;
 	}
-	inline ~NodeGraphHeader() {}
+    inline ~NodeGraphHeader() = default;
 
-	enum { NODE_GRAPH_CURRENT_VERSION = 88 };
+	enum { NODE_GRAPH_CURRENT_VERSION = 90 };
 
 	bool IsValid() const
 	{
@@ -119,7 +117,8 @@ public:
 												 const Array< AString > * patterns,
 												 bool recursive,
                                                  const Array< AString > & excludePaths,
-                                                 const Array< AString > & filesToExclude
+                                                 const Array< AString > & filesToExclude,
+                                                 const Array< AString > & excludePatterns
                                                  );
 	LibraryNode *	CreateLibraryNode( const AString & libraryName,
 									   const Dependencies & inputNodes,
@@ -266,7 +265,7 @@ private:
 
 	struct NodeWithDistance
 	{
-		inline NodeWithDistance() {}
+        inline NodeWithDistance() = default;
 		NodeWithDistance( Node * n, uint32_t dist ) : m_Node( n ), m_Distance( dist ) {}
 		Node * 		m_Node;
 		uint32_t 	m_Distance;
@@ -304,4 +303,3 @@ private:
 };
 
 //------------------------------------------------------------------------------
-#endif // FBUILD_GRAPH_NODEGRAPH_H

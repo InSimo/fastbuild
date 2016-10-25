@@ -24,6 +24,7 @@
 #include "Core/FileIO/FileStream.h"
 #include "Core/FileIO/MemoryStream.h"
 #include "Core/FileIO/PathUtils.h"
+#include "Core/Process/Thread.h"
 #include "Core/Strings/AStackString.h"
 #include "Core/Time/Timer.h"
 
@@ -125,6 +126,7 @@ void TestGraph::TestNodeTypes() const
                                                             &patterns,
                                                             false,
                                                             Array< AString >(),
+                                                             Array< AString >(),
                                                             Array< AString >() );
 	TEST_ASSERT( dn->GetType() == Node::DIRECTORY_LIST_NODE );
 	TEST_ASSERT( DirectoryListNode::GetTypeS() == Node::DIRECTORY_LIST_NODE );
@@ -145,7 +147,7 @@ void TestGraph::TestNodeTypes() const
 		Node * n = ng.CreateLibraryNode( AStackString<>( "lib" ), nodes, cn,
 										 AString::GetEmpty(), AString::GetEmpty(), AString::GetEmpty(),
 										 AString::GetEmpty(), AString::GetEmpty(), 0,
-										 nullptr, 
+                                         nullptr,
 										 Dependencies(),
 										 Dependencies(),
 										 Dependencies(),
@@ -195,7 +197,7 @@ void TestGraph::TestNodeTypes() const
 	{
 		Dependencies files( 1, false );
 		files.Append( Dependency( fn ) );
-		Node * n = ng.CreateCSNode( AStackString<>( "a.cs" ), 
+        Node * n = ng.CreateCSNode( AStackString<>( "a.cs" ),
 									files,
 									AString::GetEmpty(),
 									AString::GetEmpty(),
@@ -274,6 +276,7 @@ void TestGraph::TestDirectoryListNode() const
 														   &patterns,
 														   true,
 														   Array< AString >(),
+                                                           Array< AString >(),
 														   Array< AString >() );
 	TEST_ASSERT( ng.FindNode( name ) == node );
 
@@ -288,7 +291,7 @@ void TestGraph::TestDirectoryListNode() const
         const char * fileName1 = "Data/TestGraph/library.cpp";
         const char * fileName2 = "Data/TestGraph/library.o";
     #endif
-        
+
     // returned order depends on file system
     if ( node->GetFiles()[ 0 ].m_Name.EndsWith( fileName1 ) )
     {
@@ -309,7 +312,7 @@ void TestGraph::TestSerialization() const
 	GetCodeDir( codeDir );
 
 	const char * dbFile1	= "../tmp/Test/Graph/fbuild.db.1";
-	const char * dbFile2	= "../tmp/Test/Graph/fbuild.db.2"; 
+    const char * dbFile2    = "../tmp/Test/Graph/fbuild.db.2";
 
 	// clean up anything left over from previous runs
 	FileIO::FileDelete( dbFile1 );
@@ -341,7 +344,7 @@ void TestGraph::TestSerialization() const
 		// keep working dir active
 
 		// compare the two files
-		FileStream fs1; 
+        FileStream fs1;
 		FileStream fs2;
 		fs1.Open( dbFile1 );
 		fs2.Open( dbFile2 );
@@ -429,7 +432,7 @@ void TestGraph::TestCleanPath() const
         CHECK( "C:/Windows/System32/../../file.dat",		"C:\\file.dat",                         "" )
         CHECK( "C:/Windows/System32/../../../file.dat",		"C:\\file.dat",                         "" )
     #endif
-    
+
 	// files with . in them
 	CHECK( ".file.dat",		"C:\\Windows\\System32\\.file.dat",     "/tmp/subDir/.file.dat" )
 	CHECK( ".file",			"C:\\Windows\\System32\\.file",         "/tmp/subDir/.file" )
@@ -443,9 +446,6 @@ void TestGraph::TestCleanPath() const
 	CHECK( "subdir\\\\..\\\\.file",	"C:\\Windows\\System32\\.file",             "/tmp/subDir/.file" )
 	CHECK( "subdir//..//.file",		"C:\\Windows\\System32\\.file",             "/tmp/subDir/.file" )
 
-    //bool b( true );
-    //while ( b ) {}
-    
 	// edge cases/regressions
     #if defined( __WINDOWS__ )
         // - There was a bug with folders beginning with a slash on Windows
@@ -487,7 +487,7 @@ void TestGraph::TestDeepGraph() const
 		TEST_ASSERT( fBuild.Build( AStackString<>( "all" ) ) );
 		CheckStatsNode ( 30,		0,		Node::OBJECT_NODE );
 
-		// make sure walking the graph wasn't slow (should be a good deal less 
+        // make sure walking the graph wasn't slow (should be a good deal less
 		// than 100ms, but allow for a lot of slack on the test machine)
 		TEST_ASSERT( t.GetElapsed() < 2.0f );
 	}
@@ -614,6 +614,10 @@ void TestGraph::BFFDirtied() const
 		TEST_ASSERT( fBuild.GetEnvironmentStringSize() > 0 );
 		TEST_ASSERT( fBuild.GetWorkerList().IsEmpty() == false );
 	}
+
+    #if defined( __OSX__ )
+        Thread::Sleep( 1000 ); // Work around low time resolution of HFS+
+    #endif
 
 	// Modity BFF (make it empty)
 	{
