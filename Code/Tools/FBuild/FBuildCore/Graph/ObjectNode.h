@@ -88,6 +88,9 @@ public:
     void GetPDBName( AString & pdbName ) const;
 
     const char * GetObjExtension() const;
+
+
+    virtual int32_t GetSubPriority() const { return GetFlag(FLAG_CAN_BE_DISTRIBUTED)?1:0; }
 private:
     virtual bool DoDynamicDependencies( NodeGraph & nodeGraph, bool forceClean ) override;
     virtual BuildResult DoBuild( Job * job ) override;
