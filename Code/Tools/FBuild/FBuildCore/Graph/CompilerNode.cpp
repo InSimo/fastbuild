@@ -10,6 +10,7 @@
 #include "Tools/FBuild/FBuildCore/FBuild.h"
 #include "Tools/FBuild/FBuildCore/BFF/Functions/Function.h"
 #include "Tools/FBuild/FBuildCore/Graph/NodeGraph.h"
+#include "Tools/FBuild/FBuildCore/FLog.h"
 
 #include "Core/FileIO/IOStream.h"
 #include "Core/FileIO/PathUtils.h"
@@ -97,21 +98,32 @@ bool CompilerNode::DetermineNeedToBuild( bool forceClean ) const
     // Building for the first time?
     if ( m_Stamp == 0 )
     {
+        FLOG_INFO("Need to build '%s' (first time)", GetName().Get());
         return true;
     }
 
     // check primary file
-    const uint64_t fileTime = FileIO::GetFileLastWriteTime( m_Name );
-    if ( fileTime > m_Stamp )
+    const uint64_t lastWriteTime = FileIO::GetFileLastWriteTime( m_Name );
+    if (lastWriteTime == 0)
     {
+        // file is missing on disk
+        FLOG_INFO("Need to build '%s' (missing)", GetName().Get());
+        return true;
+    }
+    if (lastWriteTime > m_Stamp )
+    {
+        FLOG_INFO("Need to build '%s' (externally modified - stamp = %llu, disk = %llu)", GetName().Get(), m_Stamp, lastWriteTime);
         return true;
     }
 
     // check additional files
     for ( const auto & dep : m_StaticDependencies )
     {
-        if ( dep.GetNode()->GetStamp() > m_Stamp )
+        Node * n = dep.GetNode();
+        if ( n->GetStamp() > m_Stamp )
         {
+            // file is newer than us
+            FLOG_INFO( "Need to build '%s' (dep is newer: '%s' this = %llu, dep = %llu)", GetName().Get(), n->GetName().Get(), m_Stamp, n->GetStamp() );
             return true;
         }
     }
