@@ -348,6 +348,25 @@ void Node::SetLastBuildTime( uint32_t ms )
     AtomicStoreRelaxed( &m_LastBuildTimeMs, ms );
 }
 
+// GetPriority
+//------------------------------------------------------------------------------
+int32_t Node::GetPriority() const
+{
+    switch (GetType())
+    {
+    case Node::TEST_NODE:           return 9;
+    case Node::EXEC_NODE:           return 8;
+    case Node::EXE_NODE:            return 7;
+    case Node::DLL_NODE:            return 6;
+    case Node::LIBRARY_NODE:        return 5;
+    case Node::CS_NODE:             return 4;
+    case Node::OBJECT_LIST_NODE:    return 3;
+    case Node::OBJECT_NODE:         return 2;
+    case Node::UNITY_NODE:          return 1;
+    default:                        return 0;
+    }
+}
+
 // CreateNode
 //------------------------------------------------------------------------------
 /*static*/ Node * Node::CreateNode( NodeGraph & nodeGraph, Node::Type nodeType, const AString & name )
@@ -436,7 +455,7 @@ void Node::SetLastBuildTime( uint32_t ms )
     // set stamp
     n->m_Stamp = stamp;
     return n;
-}
+    }
 
 // PostLoad
 //------------------------------------------------------------------------------
@@ -1008,7 +1027,7 @@ void Node::ReplaceDummyName( const AString & newName )
     // insert additional tokens
     for ( size_t i=1; i<( numTokens-2 ); ++i )
     {
-        fixed += ':';
+            fixed += ':';
         fixed += tokens[ i ];
     }
 

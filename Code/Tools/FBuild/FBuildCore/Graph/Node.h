@@ -123,6 +123,8 @@ public:
 
     inline uint32_t        GetNameCRC() const { return m_NameCRC; }
     inline Type GetType() const { return m_Type; }
+    int32_t GetPriority() const;
+    virtual int32_t GetSubPriority() const { return 0; }
     inline const char * GetTypeName() const { return s_NodeTypeNames[ m_Type ]; }
     inline static const char * GetTypeName( Type t ) { return s_NodeTypeNames[ t ]; }
     template < class T >
