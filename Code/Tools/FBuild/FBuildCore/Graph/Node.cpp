@@ -238,7 +238,7 @@ bool Node::DetermineNeedToBuild( bool forceClean ) const
 
 
     // nothing needs building
-    FLOG_INFO( "Up-To-Date '%s'", GetName().Get() );
+    //FLOG_INFO( "Up-To-Date '%s'", GetName().Get() );
     return false;
 }
 
@@ -370,6 +370,25 @@ bool Node::DetermineNeedToBuild( bool forceClean ) const
         return false;
     }
     return true;
+}
+
+// GetPriority
+//------------------------------------------------------------------------------
+int32_t Node::GetPriority() const
+{
+    switch (GetType())
+    {
+    case Node::TEST_NODE:           return 9;
+    case Node::EXEC_NODE:           return 8;
+    case Node::EXE_NODE:            return 7;
+    case Node::DLL_NODE:            return 6;
+    case Node::LIBRARY_NODE:        return 5;
+    case Node::CS_NODE:             return 4;
+    case Node::OBJECT_LIST_NODE:    return 3;
+    case Node::OBJECT_NODE:         return 2;
+    case Node::UNITY_NODE:          return 1;
+    default:                        return 0;
+    }
 }
 
 // Load
