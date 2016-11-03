@@ -24,10 +24,11 @@ DLLNode::DLLNode( const AString & linkerOutputName,
                   const AString & linkerArgs,
                   uint32_t flags,
                   const Dependencies & assemblyResources,
+                  const Dependencies & preBuildDependencies,
                   const AString & importLibName,
                   Node * linkerStampExe,
                   const AString & linkerStampExeArgs )
-: LinkerNode( linkerOutputName, inputLibraries, otherLibraries, linkerType, linker, linkerArgs, flags, assemblyResources, importLibName, linkerStampExe, linkerStampExeArgs )
+: LinkerNode( linkerOutputName, inputLibraries, otherLibraries, linkerType, linker, linkerArgs, flags, assemblyResources, preBuildDependencies, importLibName, linkerStampExe, linkerStampExeArgs )
 {
     m_Type = DLL_NODE;
 }
@@ -79,12 +80,13 @@ void DLLNode::GetImportLibName( AString & importLibName ) const
     NODE_LOAD_DEPS( 0,          inputLibs);
     NODE_LOAD( uint32_t,        flags );
     NODE_LOAD_DEPS( 0,          assemblyResources );
+    NODE_LOAD_DEPS( 0,          preBuildDependencies );
     NODE_LOAD_DEPS( 0,          otherLibs );
     NODE_LOAD( AStackString<>,  importLibName );
     NODE_LOAD_NODE( Node,       linkerStampExe );
     NODE_LOAD( AStackString<>,  linkerStampExeArgs );
 
-    DLLNode * dn = nodeGraph.CreateDLLNode( name, inputLibs, otherLibs, linkerType, linker, linkerArgs, flags, assemblyResources, importLibName, linkerStampExe, linkerStampExeArgs );
+    DLLNode * dn = nodeGraph.CreateDLLNode( name, inputLibs, otherLibs, linkerType, linker, linkerArgs, flags, assemblyResources, preBuildDependencies, importLibName, linkerStampExe, linkerStampExeArgs );
     return dn;
 }
 

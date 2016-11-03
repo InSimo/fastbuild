@@ -188,6 +188,13 @@ FunctionExecutable::FunctionExecutable()
     {
         GetImportLibName( linkerOptions->GetString(), importLibName );
     }
+    
+    // Pre-build dependencies
+    Dependencies preBuildDependencies;
+    if ( !GetNodeList( nodeGraph, funcStartIter, ".PreBuildDependencies", preBuildDependencies, false ) )
+    {
+        return false; // GetNodeList will have emitted an error
+    }
 
     // make node for exe
     Node * n( nullptr );
@@ -201,6 +208,7 @@ FunctionExecutable::FunctionExecutable()
                               linkerOptions->GetString(),
                               flags,
                               assemblyResources,
+                              preBuildDependencies,
                               importLibName,
                               linkerStampExe,
                               linkerStampExeArgs );
@@ -215,6 +223,7 @@ FunctionExecutable::FunctionExecutable()
                               linkerOptions->GetString(),
                               flags,
                               assemblyResources,
+                              preBuildDependencies,
                               importLibName,
                               linkerStampExe,
                               linkerStampExeArgs );

@@ -35,6 +35,7 @@ LinkerNode::LinkerNode( const AString & linkerOutputName,
 						 const AString & linkerArgs,
 						 uint32_t flags,
 						 const Dependencies & assemblyResources,
+						 const Dependencies & preBuildDependencies,
 						 const AString & importLibName,
 						 Node * linkerStampExe, 
 						 const AString & linkerStampExeArgs )
@@ -55,6 +56,8 @@ LinkerNode::LinkerNode( const AString & linkerOutputName,
 		numStaticDeps++;
 	}
 	m_StaticDependencies.SetCapacity( numStaticDeps );
+
+	m_PreBuildDependencies = preBuildDependencies;
 
 	// depend on everything we'll link together
 	m_StaticDependencies.Append( inputLibraries );
@@ -730,6 +733,7 @@ void LinkerNode::EmitStampMessage() const
 	NODE_SAVE_DEPS( staticDeps );
 	NODE_SAVE( m_Flags );
 	NODE_SAVE_DEPS( m_AssemblyResources );
+	NODE_SAVE_DEPS( m_PreBuildDependencies );
 	NODE_SAVE_DEPS( m_OtherLibraries );
 	NODE_SAVE( m_ImportLibName );
     NODE_SAVE_NODE( m_LinkerStampExe );

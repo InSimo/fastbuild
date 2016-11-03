@@ -52,7 +52,7 @@ public:
 	}
     inline ~NodeGraphHeader() = default;
 
-	enum { NODE_GRAPH_CURRENT_VERSION = 90 };
+	enum { NODE_GRAPH_CURRENT_VERSION = 91 };
 
 	bool IsValid() const
 	{
@@ -165,6 +165,7 @@ public:
 								   const AString & linkerArgs,
 								   uint32_t flags,
 								   const Dependencies & assemblyResources,
+								   const Dependencies & preBuildDependencies,
 								   const AString & importLibName,
 								   Node * linkerStampExe,
 								   const AString & linkerStampExeArgs );
@@ -176,6 +177,7 @@ public:
 								   const AString & linkerArgs,
 								   uint32_t flags,
 								   const Dependencies & assemblyResources,
+								   const Dependencies & preBuildDependencies,
 								   const AString & importLibName,
 								   Node * linkerStampExe,
 								   const AString & linkerStampExeArgs );

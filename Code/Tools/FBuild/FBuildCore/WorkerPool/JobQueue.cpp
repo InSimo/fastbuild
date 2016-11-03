@@ -26,7 +26,16 @@ class JobCostSorter
 public:
     inline bool operator () ( const Job * job1, const Job * job2 ) const
     {
-        return ( job1->GetNode()->GetRecursiveCost() < job2->GetNode()->GetRecursiveCost() );
+        const Node* node1 = job1->GetNode();
+        const Node* node2 = job2->GetNode();
+        // Linker->DLL->Exe nodes first
+        // Then non distributable ones
+        // Then based on cost
+        int32_t diff = node1->GetPriority() - node2->GetPriority();
+        if (diff != 0) return diff > 0;
+        diff = node1->GetSubPriority() - node2->GetSubPriority();
+        if (diff != 0) return diff > 0;
+        return (node1->GetRecursiveCost() < node2->GetRecursiveCost() );
     }
 };
 
@@ -585,7 +594,10 @@ void JobQueue::FinishedProcessingJob( Job * job, bool success, bool wasARemoteJo
         // does not represent how long it takes to create this resource)
         node->SetLastBuildTime( timeTakenMS );
         node->SetStatFlag( Node::STATS_BUILT );
-        FLOG_INFO( "-Build: %u ms\t%s", timeTakenMS, node->GetName().Get() );
+        if ( node->GetType() != Node::FILE_NODE )
+        {
+            FLOG_INFO( "-Build: %u ms\t%s", timeTakenMS, node->GetName().Get() );
+        }
     }
 
     if ( result == Node::NODE_RESULT_FAILED )

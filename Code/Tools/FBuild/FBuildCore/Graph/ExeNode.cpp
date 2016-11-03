@@ -23,10 +23,11 @@ ExeNode::ExeNode( const AString & linkerOutputName,
                   const AString & linkerArgs,
                   uint32_t flags,
                   const Dependencies & assemblyResources,
+                  const Dependencies & preBuildDependencies,
                   const AString & importLibName,
                   Node * linkerStampExe,
                   const AString & linkerStampExeArgs )
-: LinkerNode( linkerOutputName, inputLibraries, otherLibraries, linkerType, linker, linkerArgs, flags, assemblyResources, importLibName, linkerStampExe, linkerStampExeArgs )
+: LinkerNode( linkerOutputName, inputLibraries, otherLibraries, linkerType, linker, linkerArgs, flags, assemblyResources, preBuildDependencies, importLibName, linkerStampExe, linkerStampExeArgs )
 {
     m_Type = EXE_NODE;
 }
@@ -47,12 +48,13 @@ ExeNode::~ExeNode() = default;
     NODE_LOAD_DEPS( 0,          inputLibs);
     NODE_LOAD( uint32_t,        flags );
     NODE_LOAD_DEPS( 0,          assemblyResources );
+    NODE_LOAD_DEPS( 0,          preBuildDependencies );
     NODE_LOAD_DEPS( 0,          otherLibs );
     NODE_LOAD( AStackString<>,  importLibName );
     NODE_LOAD_NODE( Node,       linkerStampExe );
     NODE_LOAD( AStackString<>,  linkerStampExeArgs );
 
-    ExeNode * en = nodeGraph.CreateExeNode( name, inputLibs, otherLibs, linkerType, linker, linkerArgs, flags, assemblyResources, importLibName, linkerStampExe, linkerStampExeArgs );
+    ExeNode * en = nodeGraph.CreateExeNode( name, inputLibs, otherLibs, linkerType, linker, linkerArgs, flags, assemblyResources, preBuildDependencies, importLibName, linkerStampExe, linkerStampExeArgs );
     return en;
 }
 
