@@ -221,6 +221,17 @@ bool CIncludeParser::ParseMSCL_Preprocessed( const char * compilerOutput,
 
         const char * incEnd = pos;
 
+        // @TODO:J temporary fixes to get rid of invalid dependencies from auto-generated parsing code
+
+        // blacklist *.l files (added by lex code generator)
+        if (incEnd - incStart >= 2 && incEnd[-2] == '.' && incEnd[-1] == 'l') continue;
+
+        // blacklist *.l files (added by yacc code generator)
+        if (incEnd - incStart >= 2 && incEnd[-2] == '.' && incEnd[-1] == 'y') continue;
+
+        // blacklist [Bison: files
+        if (strncmp(incStart, "[Bison:", 7) == 0) continue;
+
         AddInclude( incStart, incEnd );
     }
 
@@ -341,6 +352,17 @@ bool CIncludeParser::ParseGCC_Preprocessed( const char * compilerOutput,
         {
             continue;
         }
+
+        // @TODO:J temporary fixes to get rid of invalid dependencies from auto-generated parsing code
+
+        // blacklist *.l files (added by lex code generator)
+        if (lineEnd - lineStart >= 2 && lineEnd[-2] == '.' && lineEnd[-1] == 'l') continue;
+
+        // blacklist *.l files (added by yacc code generator)
+        if (lineEnd - lineStart >= 2 && lineEnd[-2] == '.' && lineEnd[-1] == 'y') continue;
+
+        // blacklist [Bison: files
+        if (strncmp(lineStart, "[Bison:", 7) == 0) continue;
 
         AddInclude( lineStart, lineEnd );
     }
