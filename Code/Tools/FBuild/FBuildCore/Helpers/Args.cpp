@@ -89,7 +89,7 @@ void Args::Clear()
 
 // Finalize
 //------------------------------------------------------------------------------
-bool Args::Finalize( const AString & exe, const AString & nodeNameForError, bool canUseResponseFile, int keepFirstArgs )
+bool Args::Finalize( const AString & exe, const AString & nodeNameForError, bool canUseResponseFile, int UNUSED( keepFirstArgs ) )
 {
 	ASSERT( !m_Finalized );
 
