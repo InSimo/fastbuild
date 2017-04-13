@@ -394,10 +394,10 @@ size_t TCPConnectionPool::GetNumConnections() const
 
 // Send
 //------------------------------------------------------------------------------
-bool TCPConnectionPool::Send( const ConnectionInfo * connection, const void * data, size_t size, uint32_t timeoutMS )
+bool TCPConnectionPool::Send( const ConnectionInfo * connection, const void * data, size_t size )
 {
     SendBuffer buffers[ 2 ]; // size + data
-
+    const uint32_t timeoutMS = 30000;
     // size
     uint32_t sizeData = (uint32_t)size;
     buffers[ 0 ].size = sizeof( sizeData );
@@ -411,9 +411,10 @@ bool TCPConnectionPool::Send( const ConnectionInfo * connection, const void * da
 }
 
 //------------------------------------------------------------------------------
-bool TCPConnectionPool::Send( const ConnectionInfo * connection, const void * data, size_t size, const void * payloadData, size_t payloadSize, uint32_t timeoutMS )
+bool TCPConnectionPool::Send( const ConnectionInfo * connection, const void * data, size_t size, const void * payloadData, size_t payloadSize )
 {
     SendBuffer buffers[ 4 ]; // size + data + payloadSize + payloadData
+    const uint32_t timeoutMS = 30000;
 
     // size
     uint32_t sizeData = (uint32_t)size;
