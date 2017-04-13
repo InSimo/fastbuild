@@ -27,7 +27,7 @@
 // Defines
 //------------------------------------------------------------------------------
 #define CLIENT_STATUS_UPDATE_FREQUENCY_SECONDS ( 0.1f )
-#define CONNECTION_LIMIT ( 15 )
+#define CONNECTION_LIMIT ( 30 )
 #define CONNECTION_REATTEMPT_DELAY_TIME ( 10.0f )
 #define SYSTEM_ERROR_ATTEMPT_COUNT ( 3 )
 
