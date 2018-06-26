@@ -35,6 +35,7 @@ REFLECT_NODE_BEGIN( ExecNode, Node, MetaName( "ExecOutput" ) + MetaFile() )
     REFLECT(        m_ExecReturnCode,           "ExecReturnCode",           MetaOptional() )
     REFLECT(        m_ExecUseStdOutAsOutput,    "ExecUseStdOutAsOutput",    MetaOptional() )
     REFLECT_ARRAY(  m_PreBuildDependencyNames,  "PreBuildDependencies",     MetaOptional() + MetaFile() + MetaAllowNonFile() )
+    REFLECT(        m_ExecAlwaysRun,            "ExecAlwaysRun",            MetaOptional() )
 
     // Internal State
     REFLECT(        m_NumExecInputFiles,        "NumExecInputFiles",        MetaHidden() )
@@ -47,6 +48,7 @@ ExecNode::ExecNode()
     , m_ExecReturnCode( 0 )
     , m_ExecUseStdOutAsOutput( false )
     , m_ExecInputPathRecurse( true )
+    , m_ExecAlwaysRun( false )
 {
     m_Type = EXEC_NODE;
 
@@ -150,6 +152,16 @@ ExecNode::~ExecNode() = default;
 
     return true;
 }
+
+// DetermineNeedToBuild
+//------------------------------------------------------------------------------
+/*virtual*/ bool ExecNode::DetermineNeedToBuild( bool forceClean ) const
+{
+    if (m_ExecAlwaysRun)
+        return true;
+    return FileNode::DetermineNeedToBuild( forceClean );
+}
+
 
 // DoBuild
 //------------------------------------------------------------------------------
