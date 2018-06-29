@@ -1258,7 +1258,7 @@ bool Function::PopulatePathAndFileHelper( const BFFIterator & iter,
 
 // PopulateArrayOfStrings
 //------------------------------------------------------------------------------
-bool Function::PopulateArrayOfStrings( NodeGraph & nodeGraph, const BFFIterator & iter, void * base, const ReflectedProperty & property, const BFFVariable * variable, bool required ) const
+bool Function::PopulateArrayOfStrings( NodeGraph & nodeGraph, const BFFIterator & iter, void * base, const ReflectedProperty & property, const BFFVariable * variable, bool /*required*/ ) const
 {
     Array< AString > strings;
     if ( !PopulateStringHelper( nodeGraph, iter, property.HasMetaData< Meta_Path >(), property.HasMetaData< Meta_File >(), property.HasMetaData< Meta_AllowNonFile >(), variable, strings ) )
@@ -1266,12 +1266,14 @@ bool Function::PopulateArrayOfStrings( NodeGraph & nodeGraph, const BFFIterator 
         return false; // PopulateStringHelper will have emitted an error
     }
 
+    // Temporarily disable the next check until we modify the
+    // CMake Fastbuild generator (it can output empty arrays)
     // Empty arrays are not allowed if property is required
-    if ( strings.IsEmpty() && required )
-    {
-        Error::Error_1004_EmptyStringPropertyNotAllowed( iter, this, property.GetName() ); // TODO:B A specific error for empty array of strings?
-        return false;
-    }
+    //if ( strings.IsEmpty() && required )
+    //{
+    //    Error::Error_1004_EmptyStringPropertyNotAllowed( iter, this, property.GetName() ); // TODO:B A specific error for empty array of strings?
+    //    return false;
+    //}
 
     // Arrays must not contain empty strings
     for ( const AString& string : strings )
