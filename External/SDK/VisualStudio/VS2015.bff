@@ -6,16 +6,16 @@
 //------------------------------------------------------------------------------
 Compiler( 'Compiler-VS2015-x86' )
 {
-    .Root       = '$VS2015_BasePath$/VC/bin/amd64_x86'
+    .Root       = '$VS2015_BasePath$/VC/bin'
     .Executable = '$Root$/cl.exe'
     .ExtraFiles = { '$Root$/c1.dll'
                     '$Root$/c1xx.dll',
                     '$Root$/c2.dll',
-                    '$Root$/../amd64/msobj140.dll' // NOTE: Annoyingly not present in the same dir
-                    '$Root$/../amd64/mspdb140.dll' // NOTE: Annoyingly not present in the same dir
-                    '$Root$/../amd64/mspdbcore.dll'// NOTE: Annoyingly not present in the same dir
-                    '$Root$/../amd64/mspdbsrv.exe' // NOTE: Annoyingly not present in the same dir
-                    '$Root$/../amd64/mspft140.dll' // NOTE: Annoyingly not present in the same dir
+                    '$Root$/msobj140.dll' // NOTE: Annoyingly not present in the same dir
+                    '$Root$/mspdb140.dll' // NOTE: Annoyingly not present in the same dir
+                    '$Root$/mspdbcore.dll'// NOTE: Annoyingly not present in the same dir
+                    '$Root$/mspdbsrv.exe' // NOTE: Annoyingly not present in the same dir
+                    '$Root$/mspft140.dll' // NOTE: Annoyingly not present in the same dir
                     '$Root$/1033/clui.dll'
                     '$VS2015_BasePath$/VC/redist/x64/Microsoft.VC140.CRT/msvcp140.dll'
                     '$VS2015_BasePath$/VC/redist/x64/Microsoft.VC140.CRT/vccorlib140.dll'
@@ -27,17 +27,17 @@ Compiler( 'Compiler-VS2015-x86' )
 //------------------------------------------------------------------------------
 Compiler( 'Compiler-VS2015-x64' )
 {
-    .Root       = '$VS2015_BasePath$/VC/bin/amd64'
-    .Executable = '$Root$/cl.exe'
-    .ExtraFiles = { '$Root$/c1.dll'
-                    '$Root$/c1xx.dll',
-                    '$Root$/c2.dll',
+    .Root       = '$VS2015_BasePath$/VC/bin'
+    .Executable = '$Root$/x86_amd64/cl.exe'
+    .ExtraFiles = { '$Root$/x86_amd64/c1.dll'
+                    '$Root$/x86_amd64/c1xx.dll',
+                    '$Root$/x86_amd64/c2.dll',
                     '$Root$/msobj140.dll'
                     '$Root$/mspdb140.dll'
                     '$Root$/mspdbcore.dll'
                     '$Root$/mspdbsrv.exe'
                     '$Root$/mspft140.dll'
-                    '$Root$/1033/clui.dll'
+                    '$Root$/x86_amd64/1033/clui.dll'
                     '$VS2015_BasePath$/VC/redist/x64/Microsoft.VC140.CRT/msvcp140.dll'
                     '$VS2015_BasePath$/VC/redist/x64/Microsoft.VC140.CRT/vccorlib140.dll'
                     '$VS2015_BasePath$/VC/redist/x64/Microsoft.VC140.CRT/vcruntime140.dll'
@@ -60,8 +60,8 @@ Compiler( 'Compiler-VS2015-x64' )
     .LinkerOptions                  = .VSLibPaths
 
     .Compiler                       = 'Compiler-VS2015-X86'
-    .Librarian                      = '$VS2015_BasePath$/VC/bin/amd64_x86/lib.exe'
-    .Linker                         = '$VS2015_BasePath$/VC/bin/amd64_x86/link.exe'
+    .Librarian                      = '$VS2015_BasePath$/VC/bin/lib.exe'
+    .Linker                         = '$VS2015_BasePath$/VC/bin/link.exe'
 
     .CRTLibs_Static                 = ' LIBCMT.LIB'
                                     + ' libvcruntime.lib'
@@ -73,7 +73,7 @@ Compiler( 'Compiler-VS2015-x64' )
 .ToolChain_VS2015_Windows_X64 =
 [
     .VSIncludePaths                 = ' -I"$VS2015_BasePath$/VC/include/"'
-    .VSLibPaths                     = ' /LIBPATH:"$VS2015_BasePath$/VC/lib/amd64"'
+    .VSLibPaths                     = ' /LIBPATH:"$VS2015_BasePath$/VC/lib/amd64"  /LIBPATH:"$VS2015_BasePath$/VC/bin"'
 
     .CompilerOptions                = .VSIncludePaths
     .CompilerOptionsC               = .VSIncludePaths
@@ -83,8 +83,8 @@ Compiler( 'Compiler-VS2015-x64' )
     .LinkerOptions                  = .VSLibPaths
 
     .Compiler                       = 'Compiler-VS2015-X64'
-    .Librarian                      = '$VS2015_BasePath$/VC/bin/amd64/lib.exe'
-    .Linker                         = '$VS2015_BasePath$/VC/bin/amd64/link.exe'
+    .Librarian                      = '$VS2015_BasePath$/VC/bin/x86_amd64/lib.exe'
+    .Linker                         = '$VS2015_BasePath$/VC/bin/x86_amd64/link.exe'
 
     .CRTLibs_Static                 = ' LIBCMT.LIB'
                                     + ' libvcruntime.lib'
@@ -93,7 +93,7 @@ Compiler( 'Compiler-VS2015-x64' )
 
 // PATH environment variable
 //------------------------------------------------------------------------------
-.VS_2015_PATH                       = '$VS2015_BasePath$/Common7/IDE/;$VS2015_BasePath$/VC/bin/amd64/;$VS2015_BasePath$/VC/redist/x64/Microsoft.VC140.CRT/'
+.VS_2015_PATH                       = '$VS2015_BasePath$/Common7/IDE/;$VS2015_BasePath$/VC/bin/;$VS2015_BasePath$/VC/bin/amd64/;$VS2015_BasePath$/VC/bin/x86_amd64/;$VS2015_BasePath$/VC/redist/x64/Microsoft.VC140.CRT/'
 
 // Platform Toolset for Project Generation
 //------------------------------------------------------------------------------
