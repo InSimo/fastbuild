@@ -682,6 +682,10 @@ void LinkerNode::GetAssemblyResourceFiles( Args & fullArgs, const AString & pre,
         {
             flags |= LinkerNode::LINK_FLAG_CODEWARRIOR_LD;
         }
+        else
+        {
+            FLOG_ERROR( "FBuild: Error: unrecognized LinkerType '%s'\n", linkerType.Get() );
+        }
     }
 
     return flags;
