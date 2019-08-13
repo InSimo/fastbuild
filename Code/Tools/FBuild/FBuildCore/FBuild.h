@@ -54,6 +54,8 @@ public:
 
     static const char * GetDefaultBFFFileName();
 
+    inline const NodeGraph * GetDependencyGraph() const { return m_DependencyGraph; }
+
     inline const SettingsNode * GetSettings() const { return m_DependencyGraph->GetSettings(); }
 
     void SetEnvironmentString( const char * envString, uint32_t size, const AString & libEnvVar );

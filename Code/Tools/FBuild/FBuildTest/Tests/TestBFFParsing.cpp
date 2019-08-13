@@ -8,6 +8,7 @@
 #include "Tools/FBuild/FBuildCore/FBuild.h"
 #include "Tools/FBuild/FBuildCore/BFF/BFFParser.h"
 #include "Tools/FBuild/FBuildCore/Graph/NodeGraph.h"
+#include "Tools/FBuild/FBuildCore/Graph/SettingsNode.h"
 
 #include "Core/Containers/AutoPtr.h"
 #include "Core/Env/Env.h"
@@ -62,6 +63,9 @@ private:
     void CyclicDependency() const;
     void SelfAssignment() const;
     void SelfAssignment2() const;
+    void MissingAndRequired() const;
+    void MissingButNotRequired() const;
+    void ExistingButNotRequired() const;
 
     void Parse( const char * fileName, bool expectFailure = false ) const;
 };
@@ -111,6 +115,9 @@ REGISTER_TESTS_BEGIN( TestBFFParsing )
     REGISTER_TEST( CyclicDependency )
     REGISTER_TEST( SelfAssignment )
     REGISTER_TEST( SelfAssignment2 )
+    REGISTER_TEST( MissingAndRequired )
+    REGISTER_TEST( MissingButNotRequired )
+    REGISTER_TEST( ExistingButNotRequired )
 REGISTER_TESTS_END
 
 // Empty
@@ -475,6 +482,57 @@ void TestBFFParsing::SelfAssignment2() const
 
     TEST_ASSERT( fBuild.Initialize() == true );
     TEST_ASSERT( GetRecordedOutput().Find( "FAILED" ) == nullptr );
+}
+
+// Missing
+//------------------------------------------------------------------------------
+void TestBFFParsing::MissingAndRequired() const
+{
+    // Check that a missing BFF file is detected as an error
+    FBuildTestOptions options;
+    options.m_ConfigFile = "Tools/FBuild/FBuildTest/Data/this_file_does_not_exist.bff";
+    FBuild fBuild( options );
+
+    TEST_ASSERT( fBuild.Initialize() == false );
+    TEST_ASSERT( GetRecordedOutput().Find( "Failed to open BFF" ) != nullptr );
+}
+
+// MissingButNotRequired
+//------------------------------------------------------------------------------
+void TestBFFParsing::MissingButNotRequired() const
+{
+    // Check that a missing BFF file is NOT detected as an error
+    // if the options explicitly set the PerformBuild flag to false
+    FBuildTestOptions options;
+    options.m_ConfigFile = "Tools/FBuild/FBuildTest/Data/this_file_does_not_exist.bff";
+    options.m_PerformBuild = false;
+    FBuild fBuild( options );
+
+    TEST_ASSERT( fBuild.Initialize() == true );
+    TEST_ASSERT( fBuild.GetDependencyGraph() != nullptr );
+    // GetLatestFileTimeStamp() returning 0 can be used to detect
+    // that no BFF was actually parsed
+    TEST_ASSERT( fBuild.GetDependencyGraph()->GetLatestFileTimeStamp() == 0 );
+    TEST_ASSERT( GetRecordedOutput().FindI( "FAILED" ) == nullptr );
+}
+
+// ExistingButNotRequired
+//------------------------------------------------------------------------------
+void TestBFFParsing::ExistingButNotRequired() const
+{
+    // Check that a BFF file is still loaded if it exists
+    // even if the options explicitly set the PerformBuild flag to false
+    // so that custom settings such as CachePath can be taken into account
+    FBuildTestOptions options;
+    options.m_ConfigFile = "Tools/FBuild/FBuildTest/Data/TestBFFParsing/strings.bff";
+    options.m_PerformBuild = false;
+    FBuild fBuild( options );
+
+    TEST_ASSERT( fBuild.Initialize() == true );
+    TEST_ASSERT( fBuild.GetDependencyGraph() != nullptr );
+    TEST_ASSERT( fBuild.GetDependencyGraph()->GetLatestFileTimeStamp() > 0 );
+    TEST_ASSERT( fBuild.GetSettings()->GetCachePath() == "{{{{{" );
+    TEST_ASSERT( GetRecordedOutput().FindI( "FAILED" ) == nullptr );
 }
 
 //------------------------------------------------------------------------------

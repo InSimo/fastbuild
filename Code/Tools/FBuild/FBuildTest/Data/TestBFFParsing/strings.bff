@@ -23,7 +23,7 @@
 ; scope tokens in strings
 Settings
 {
-    .A = "{{{{{"
+    .CachePath = "{{{{{"
     .B = '{{{{{'
     .C = ';'
     .D = ";"
