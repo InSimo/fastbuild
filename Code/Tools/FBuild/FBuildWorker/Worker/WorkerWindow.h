@@ -18,6 +18,7 @@
 class OSDropDown;
 class OSFont;
 class OSLabel;
+class OSEdit;
 class OSListView;
 class OSMenu;
 class OSSplitter;
@@ -52,6 +53,7 @@ private:
     virtual bool OnTrayIconRightClick() override;
     virtual void OnDropDownSelectionChanged( OSDropDown * dropDown ) override;
     virtual void OnTrayIconMenuItemSelected( uint32_t index ) override;
+    virtual void OnEditChanged( OSEdit * edit ) override;
 
     // Internal Helpers
     void ToggleMinimized();
@@ -67,6 +69,12 @@ private:
     OSListView *        m_ThreadList;
     OSDropDown *        m_ModeDropDown;
     OSDropDown *        m_ResourcesDropDown;
+    OSLabel *           m_GracePeriodLabel;
+    OSEdit *            m_GracePeriodEdit;
+    OSLabel *           m_BlockingLabel;
+    OSEdit *            m_BlockingEdit;
+    OSLabel *           m_BlockingGracePeriodLabel;
+    OSEdit *            m_BlockingGracePeriodEdit;
     OSSplitter *        m_Splitter;
     OSMenu *            m_Menu;
 

@@ -138,6 +138,16 @@ int MainCommon( const AString & args )
         {
             WorkerSettings::Get().SetMode( options.m_WorkMode );
         }
+        if ( options.m_BlockingProcessNames.IsEmpty() == false )
+        {
+            Array<AString> blocking ( WorkerSettings::Get().GetBlockingProcessNames() );
+            for ( const AString& s : options.m_BlockingProcessNames )
+            {
+                if ( blocking.Find( s ) == nullptr )
+                    blocking.Append( s );
+            }
+            WorkerSettings::Get().SetBlockingProcessNames( blocking );
+        }
         ret = worker.Work();
     }
 

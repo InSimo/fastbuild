@@ -34,6 +34,7 @@ public:
     uint32_t m_CPUAllocation;
     bool m_OverrideWorkMode;
     WorkerSettings::Mode m_WorkMode;
+    Array<AString> m_BlockingProcessNames;
 
     // Console mode
     bool m_ConsoleMode;

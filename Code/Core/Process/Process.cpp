@@ -904,6 +904,90 @@ bool Process::ReadAllData( AutoPtr< char > & outMem, uint32_t * outMemSize,
     #endif
 }
 
+// GetParentId
+//------------------------------------------------------------------------------
+/*static*/ uint32_t Process::GetParentId( uint32_t pid, int level )
+{
+    ASSERT ( level >= 0 );
+
+    if (level == 0) return pid;
+
+    #if defined( __WINDOWS__ )
+    {
+        PROCESSENTRY32 pe;
+        memset( &pe, 0, sizeof( PROCESSENTRY32) );
+        pe.dwSize = sizeof( PROCESSENTRY32 );
+
+        const HANDLE hSnap = ::CreateToolhelp32Snapshot( TH32CS_SNAPPROCESS, 0 );
+
+        while (level > 0 && pid != 0xffffffff)
+        {
+            uint32_t ppid = 0xffffffff;
+            // find parent process
+            if ( ::Process32First( hSnap, &pe ) )
+            {
+                do
+                {
+                    if ( pe.th32ProcessID == pid )
+                    {
+                        ppid = pe.th32ParentProcessID;
+                        break;
+                    }
+                }
+                while ( ::Process32Next( hSnap, &pe ) );
+            }
+            pid = ppid;
+            --level;
+        }
+        ::CloseHandle( hSnap );
+        return pid;
+    }
+    #elif defined( __LINUX__ )
+    {
+        // special case for our own parent
+        if (pid == ::getpid())
+        {
+            --level;
+            pid = ::getppid();
+        }
+        // other levels need to use the /proc/<pid>/stat files
+        while (level > 0 && pid != 0xffffffff)
+        {
+            uint32_t ppid = 0xffffffff;
+            AStackString< 1024 > processInfo;
+            // Read the first line of /proc/<pid>/stat for the process
+            if ( GetProcessInfoString( AStackString<>().Format( "/proc/%u/stat", pid ).Get(),
+                                    processInfo ) )
+            {
+                continue; // Process might have exited
+            }
+
+            // Item index 3 (0-based) is the parent PID
+            Array< AString > tokens( 32, true );
+            processInfo.Tokenize( tokens, ' ' );
+            ASSERT( pid == strtoul( tokens[ 0 ].Get(), nullptr, 10 ) ); // Item index 0 (0-based) is the PID
+            ppid = strtoul( tokens[ 3 ].Get(), nullptr, 10 );
+
+            pid = ppid;
+            --level;
+        }
+        return pid;
+    }
+    #elif defined( __OSX__ )
+    {
+        // special case for our own parent
+        if (pid == ::getpid())
+        {
+            --level;
+            pid = ::getppid();
+        }
+        // other levels : TODO
+        ASSERT(level == 0);
+        return pid;
+    }
+    #endif
+}
+
 // Terminate
 //------------------------------------------------------------------------------
 void Process::Terminate()
@@ -914,5 +998,38 @@ void Process::Terminate()
         kill( m_ChildPID, SIGKILL );
     #endif
 }
+
+// GetProcessInfoString
+//------------------------------------------------------------------------------
+#if defined( __LINUX__ )
+    /*static*/ bool Process::GetProcessInfoString( const char * fileName,
+                                                            AStackString< 1024 > & outProcessInfoString )
+    {
+        // Open the file
+        FileStream f;
+        if ( f.Open( fileName, FileStream::READ_ONLY ) == false )
+        {
+            return false;
+        }
+
+        // Try to read 1KiB
+        outProcessInfoString.SetLength( 1024 );
+        const uint32_t len = f.ReadBuffer( outProcessInfoString.Get(), outProcessInfoString.GetLength() );
+        outProcessInfoString.SetLength( len );
+
+        // Truncate to the first line
+        const char * lineEnd = outProcessInfoString.Find( '\n' );
+        if ( lineEnd )
+        {
+            outProcessInfoString.SetLength( lineEnd - outProcessInfoString.Get() );
+            return true;
+        }
+
+        // Line was too long or there was some other problem
+        ASSERT( false && "Unexpected proc file size");
+        outProcessInfoString.Clear();
+        return false;
+    }
+#endif
 
 //------------------------------------------------------------------------------

@@ -19,7 +19,7 @@ public:
     explicit WorkerThreadRemote( uint32_t threadIndex );
     virtual ~WorkerThreadRemote() override;
 
-    void GetStatus( AString & hostName, AString & status, bool & isIdle ) const;
+    void GetStatus( AString & hostName, AString & status, bool & isIdle, bool & isBusy ) const;
 
     // control remote CPU usage
     static void     SetNumCPUsToUse( uint32_t c ) { s_NumCPUsToUse = c; }

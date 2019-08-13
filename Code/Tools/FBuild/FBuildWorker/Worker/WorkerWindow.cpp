@@ -15,6 +15,7 @@
 #include "OSUI/OSDropDown.h"
 #include "OSUI/OSFont.h"
 #include "OSUI/OSLabel.h"
+#include "OSUI/OSEdit.h"
 #include "OSUI/OSListView.h"
 #include "OSUI/OSMenu.h"
 #include "OSUI/OSSplitter.h"
@@ -27,6 +28,9 @@
 #include "Core/Network/Network.h"
 #include "Core/Strings/AString.h"
 #include "Core/Strings/AStackString.h"
+
+// system
+#include <stdio.h> // for sscanf
 
 // Defines
 //------------------------------------------------------------------------------
@@ -43,6 +47,12 @@ WorkerWindow::WorkerWindow()
     , m_ThreadList( nullptr )
     , m_ModeDropDown( nullptr )
     , m_ResourcesDropDown( nullptr )
+    , m_GracePeriodLabel( nullptr )
+    , m_GracePeriodEdit( nullptr )
+    , m_BlockingLabel( nullptr )
+    , m_BlockingEdit( nullptr )
+    , m_BlockingGracePeriodLabel( nullptr )
+    , m_BlockingGracePeriodEdit( nullptr )
     , m_Splitter( nullptr )
     , m_Menu( nullptr )
 {
@@ -51,7 +61,7 @@ WorkerWindow::WorkerWindow()
 
     // center the window on screen
     const uint32_t w = 700;
-    const uint32_t h = 300;
+    const uint32_t h = 350;
     const int32_t x = (int32_t)( GetPrimaryScreenWidth() - w );
     const int32_t y = 0;
 
@@ -69,7 +79,7 @@ WorkerWindow::WorkerWindow()
         // get main window dimensions for positioning/sizing child controls
         RECT rcClient; // The parent window's client area.
         GetClientRect( (HWND)GetHandle(), &rcClient );
-        m_ThreadList->Init( 0, 30, (uint32_t)( rcClient.right - rcClient.left) , (uint32_t)( ( rcClient.bottom - rcClient.top ) - 30 ) );
+        m_ThreadList->Init( 0, 60, (uint32_t)( rcClient.right - rcClient.left) , (uint32_t)( ( rcClient.bottom - rcClient.top ) - 30 ) );
     #elif defined( __OSX__ )
         m_ThreadList->Init( 4, 30, w - 8, h - 38 );
     #endif
@@ -128,9 +138,50 @@ WorkerWindow::WorkerWindow()
     m_ResourcesLabel->SetFont( m_Font );
     m_ResourcesLabel->Init( 335, 7, 45, 15, "Using:" );
 
+    // GracePeriod edit
+    static AStackString<> gracePeriodText;
+    gracePeriodText.Format( "%u", WorkerSettings::Get().GetGracePeriod() );
+    m_GracePeriodEdit = FNEW( OSEdit( this ) );
+    m_GracePeriodEdit->SetFont( m_Font );
+    m_GracePeriodEdit->Init( 650, 3, 30, 20, gracePeriodText.Get() );
+
+    // GracePeriod label
+    m_GracePeriodLabel = FNEW( OSLabel( this ) );
+    m_GracePeriodLabel->SetFont( m_Font );
+    m_GracePeriodLabel->Init( 535, 7, 115, 15, "Kill After (s):" );
+
+    // Blocking edit
+    static AStackString<> blockingText;
+    for (const AString& s : WorkerSettings::Get().GetBlockingProcessNames())
+    {
+        if ( blockingText.IsEmpty() == false )
+            blockingText += ',';
+        blockingText += s;
+    }
+    m_BlockingEdit = FNEW( OSEdit( this ) );
+    m_BlockingEdit->SetFont( m_Font );
+    m_BlockingEdit->Init( 100, 30, 428, 20, blockingText.Get() );
+
+    // Blocking label
+    m_BlockingLabel = FNEW( OSLabel( this ) );
+    m_BlockingLabel->SetFont( m_Font );
+    m_BlockingLabel->Init( 5, 32, 95, 15, "Blocking Apps:" );
+
+    // BlockingGracePeriod edit
+    static AStackString<> blockingGracePeriodText;
+    blockingGracePeriodText.Format( "%u", WorkerSettings::Get().GetBlockingGracePeriod() );
+    m_BlockingGracePeriodEdit = FNEW( OSEdit( this ) );
+    m_BlockingGracePeriodEdit->SetFont( m_Font );
+    m_BlockingGracePeriodEdit->Init( 650, 30, 30, 20, blockingGracePeriodText.Get() );
+
+    // BlockingGracePeriod label
+    m_BlockingGracePeriodLabel = FNEW( OSLabel( this ) );
+    m_BlockingGracePeriodLabel->SetFont( m_Font );
+    m_BlockingGracePeriodLabel->Init( 535, 32, 115, 15, "Blocking Kill After:" );
+
     // splitter
     m_Splitter = FNEW( OSSplitter( this ) );
-    m_Splitter->Init( 0, 27, w, 2u );
+    m_Splitter->Init( 0, 57, w, 2u );
 
     // popup menu for tray icon
     m_Menu = FNEW( OSMenu( this ) );
@@ -300,6 +351,39 @@ void WorkerWindow::Work()
 {
     // We only have one menu item right now
     SetWantToQuit();
+}
+
+// OnEditChanged
+//------------------------------------------------------------------------------
+/*virtual*/ void WorkerWindow::OnEditChanged( OSEdit * edit )
+{
+    if ( edit == nullptr )
+    {
+        return; // for some reasons this gets called during init with a null pointer...
+    }
+    if ( edit == m_BlockingEdit )
+    {
+        Array<AString> blocking;
+        edit->GetText().Tokenize(blocking, ',');
+        WorkerSettings::Get().SetBlockingProcessNames( blocking );
+    }
+    else if ( edit == m_BlockingGracePeriodEdit )
+    {
+        uint32_t val = 0;
+        PRAGMA_DISABLE_PUSH_MSVC( 4996 ) // This function or variable may be unsafe...
+        sscanf( edit->GetText().Get(), "%u", &val );
+        PRAGMA_DISABLE_POP_MSVC // 4996
+        WorkerSettings::Get().SetBlockingGracePeriod( val );
+    }
+    else if ( edit == m_GracePeriodEdit )
+    {
+        uint32_t val = 0;
+        PRAGMA_DISABLE_PUSH_MSVC( 4996 ) // This function or variable may be unsafe...
+        sscanf( edit->GetText().Get(), "%u", &val );
+        PRAGMA_DISABLE_POP_MSVC // 4996
+        WorkerSettings::Get().SetGracePeriod( val );
+    }
+    WorkerSettings::Get().Save();
 }
 
 // ToggleMinimized

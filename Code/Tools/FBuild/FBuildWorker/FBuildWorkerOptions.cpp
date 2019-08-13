@@ -87,6 +87,13 @@ bool FBuildWorkerOptions::ProcessCommandLine( const AString & commandLine )
             }
             // problem... fall through
         }
+        else if ( token.BeginsWith( "-blocking=" ) )
+        {
+            Array< AString > names;
+            AString( token.Get() + 10 ).Tokenize( names, ',' );
+            m_BlockingProcessNames.Append(names);
+            continue;
+        }
         else if ( token == "-mode=disabled" )
         {
             m_WorkMode = WorkerSettings::DISABLED;
@@ -150,6 +157,7 @@ void FBuildWorkerOptions::ShowUsageError()
                        "                idle : Accept work when PC is idle.\n"
                        "                dedicated : Accept work always.\n"
                        "                proportional : Accept work proportional to free CPU.\n"
+                       "-blocking=exeName1[,exeName2]... : Add executables name prefixes to the blocking list.\n"
                        "\n"
                        #if defined( __WINDOWS__ )
                        "-nosubprocess : Don't spawn a sub-process worker copy.\n";

@@ -6,6 +6,7 @@
 //------------------------------------------------------------------------------
 #include "Core/Env/Types.h"
 #include "Core/Containers/AutoPtr.h"
+#include "Core/Strings/AStackString.h"
 
 // Process
 //------------------------------------------------------------------------------
@@ -47,6 +48,11 @@ public:
     #endif
     bool HasAborted() const { return m_HasAborted; }
     static uint32_t GetCurrentId();
+    static uint32_t GetParentId( uint32_t pid = GetCurrentId(), int level = 1);
+    #if defined( __LINUX__ )
+        static bool GetProcessInfoString( const char * fileName,
+                                          AStackString< 1024 > & outProcessInfoString );
+    #endif
 private:
     #if defined( __WINDOWS__ )
         void KillProcessTreeInternal( const void * hProc, // HANDLE

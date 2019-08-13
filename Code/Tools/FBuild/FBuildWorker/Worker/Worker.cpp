@@ -22,6 +22,7 @@
 #include "Core/Env/Env.h"
 #include "Core/Env/ErrorFormat.h"
 #include "Core/FileIO/FileIO.h"
+#include "Core/FileIO/MemoryStream.h"
 #include "Core/Network/NetworkStartupHelper.h"
 #include "Core/Process/Process.h"
 #include "Core/Profile/Profile.h"
@@ -260,13 +261,22 @@ bool Worker::HasEnoughDiskSpace()
 //------------------------------------------------------------------------------
 void Worker::UpdateAvailability()
 {
-    // Check disk space
-    bool hasEnoughDiskSpace = HasEnoughDiskSpace();
-
-    m_IdleDetection.Update();
 
     WorkerSettings & ws = WorkerSettings::Get();
     uint32_t numCPUsToUse = ws.GetNumCPUsToUse();
+    const Array<AString>& blockingProcessNames = ws.GetBlockingProcessNames();
+    Array<uint32_t> blockingPidToAdd;
+    Array<uint32_t> blockingPidToRemove;
+    uint32_t modeToSet = (uint32_t)ws.GetMode();
+    uint64_t killAfter = 0;
+    m_ConnectionPool->GetRequestedChanges(modeToSet, blockingPidToAdd, blockingPidToRemove, killAfter);
+    if (modeToSet != (uint32_t)ws.GetMode())
+    {
+        ws.SetMode((WorkerSettings::Mode)modeToSet);
+    }
+
+    m_IdleDetection.Update(blockingProcessNames, blockingPidToAdd, blockingPidToRemove);
+
     switch( ws.GetMode() )
     {
         case WorkerSettings::WHEN_IDLE:
@@ -300,8 +310,21 @@ void Worker::UpdateAvailability()
         }
     }
 
+    // don't accept any new work if there are local processes which asked
+    // for exclusive use of the computer
+    if ( m_IdleDetection.IsBlocked() )
+    {
+        numCPUsToUse = 0;
+    }
+
+    // don't accept any new work if we don't have enough disk space
+    if ( numCPUsToUse > 0 && !HasEnoughDiskSpace() )
+    {
+        numCPUsToUse = 0;
+    }
+
     // don't accept any new work while waiting for a restart
-    if ( m_RestartNeeded || ( hasEnoughDiskSpace == false ) )
+    if ( m_RestartNeeded )
     {
         numCPUsToUse = 0;
     }
@@ -345,19 +368,25 @@ void Worker::UpdateUI()
         m_MainWindow->SetStatus( status.Get() );
     }
 
-
-    if ( InConsoleMode() == false )
+    uint8_t requestedServerInfoLevel = m_ConnectionPool->GetRequestedServerInfoLevel();
+    if ( InConsoleMode() == false || requestedServerInfoLevel )
     {
         // thread output
         JobQueueRemote & jqr = JobQueueRemote::Get();
         const size_t numWorkers = jqr.GetNumWorkers();
+        int countIdle = 0;
+        int countBusy = 0;
+        MemoryStream stream;
         for ( size_t i=0; i<numWorkers; ++i )
         {
             // get status of worker
             AStackString<> workerStatus;
             AStackString<> hostName;
             bool isIdle;
-            jqr.GetWorkerStatus( i, hostName, workerStatus, isIdle );
+            bool isBusy;
+            jqr.GetWorkerStatus( i, hostName, workerStatus, isIdle, isBusy );
+            if (isIdle) ++countIdle;
+            if (isBusy) ++countBusy;
 
             // are we syncing tools?
             if ( isIdle )
@@ -370,8 +399,33 @@ void Worker::UpdateUI()
                 }
             }
 
-            // reflect in UI
-            m_MainWindow->SetWorkerState( i, hostName, workerStatus );
+            if ( InConsoleMode() == false )
+            {
+                // reflect in UI
+                m_MainWindow->SetWorkerState( i, hostName, workerStatus );
+            }
+
+            if (requestedServerInfoLevel > 1)
+            {
+                stream.Write(isIdle);
+                stream.Write(isBusy);
+                stream.Write(hostName);
+                stream.Write(workerStatus);
+            }
+        }
+        if (requestedServerInfoLevel)
+        {
+            Protocol::MsgServerInfo msg(
+               (uint8_t)m_WorkerSettings->GetMode(),                // mode
+               (uint16_t)numConnections,                            // numClients
+               (uint16_t)numWorkers,                                // numCPUTotal
+               (uint16_t)countIdle,                                 // numCPUAvailable
+               (uint16_t)countBusy,                                 // numCPUBusy
+               (uint16_t)m_IdleDetection.GetNumBlockingProcesses(), // numBlockingProcesses
+               m_IdleDetection.GetCPUUsageFASTBuild(),              // m_CPUUsageFASTBuild
+               m_IdleDetection.GetCPUUsageTotal()                   // m_CPUUsageTotal
+            );
+            m_ConnectionPool->SendServerInfo( msg, stream );
         }
     }
 

@@ -78,13 +78,15 @@ WorkerThreadRemote::~WorkerThreadRemote()
 
 // GetStatus
 //------------------------------------------------------------------------------
-void WorkerThreadRemote::GetStatus( AString & hostName, AString & status, bool & isIdle ) const
+void WorkerThreadRemote::GetStatus( AString & hostName, AString & status, bool & isIdle, bool & isBusy ) const
 {
     isIdle = false;
+    isBusy = false;
 
     MutexHolder mh( m_CurrentJobMutex );
     if ( m_CurrentJob )
     {
+        isBusy = true;
         Server::GetHostForJob( m_CurrentJob, hostName );
         if ( IsEnabled() == false )
         {

@@ -89,9 +89,9 @@ bool JobQueueRemote::HaveWorkersStopped() const
 
 // GetWorkerStatus
 //------------------------------------------------------------------------------
-void JobQueueRemote::GetWorkerStatus( size_t index, AString & hostName, AString & status, bool & isIdle ) const
+void JobQueueRemote::GetWorkerStatus( size_t index, AString & hostName, AString & status, bool & isIdle, bool & isBusy ) const
 {
-    ( (WorkerThreadRemote *)m_Workers[ index ] )->GetStatus( hostName, status, isIdle );
+    ( (WorkerThreadRemote *)m_Workers[ index ] )->GetStatus( hostName, status, isIdle, isBusy );
 }
 
 // MainThreadWait

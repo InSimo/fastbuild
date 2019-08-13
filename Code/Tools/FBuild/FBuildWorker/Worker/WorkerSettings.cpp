@@ -18,7 +18,7 @@
 // Other
 //------------------------------------------------------------------------------
 #define FBUILDWORKER_SETTINGS_MIN_VERSION ( 1 )     // Oldest compatible version
-#define FBUILDWORKER_SETTINGS_CURRENT_VERSION ( 3 ) // Current version
+#define FBUILDWORKER_SETTINGS_CURRENT_VERSION ( 4 ) // Current version
 
 // CONSTRUCTOR
 //------------------------------------------------------------------------------
@@ -26,6 +26,8 @@ WorkerSettings::WorkerSettings()
     : m_Mode( WHEN_IDLE )
     , m_NumCPUsToUse( 1 )
     , m_StartMinimized( false )
+    , m_GracePeriod( 0 )
+    , m_BlockingGracePeriod( 30 )
 {
     // half CPUs available to use by default
     uint32_t numCPUs = Env::GetNumProcessors();
@@ -62,6 +64,27 @@ void WorkerSettings::SetStartMinimized( bool startMinimized )
     m_StartMinimized = startMinimized;
 }
 
+// SetGracePeriod
+//------------------------------------------------------------------------------
+void WorkerSettings::SetGracePeriod( uint32_t gracePeriod )
+{
+    m_GracePeriod = gracePeriod;
+}
+
+// SetBlockingProcessNames
+//------------------------------------------------------------------------------
+void WorkerSettings::SetBlockingProcessNames( const Array<AString>& blockingProcessNames )
+{
+    m_BlockingProcessNames = blockingProcessNames;
+}
+
+// SetBlockingGracePeriod
+//------------------------------------------------------------------------------
+void WorkerSettings::SetBlockingGracePeriod( uint32_t blockingGracePeriod )
+{
+    m_BlockingGracePeriod = blockingGracePeriod;
+}
+
 // Load
 //------------------------------------------------------------------------------
 void WorkerSettings::Load()
@@ -87,6 +110,12 @@ void WorkerSettings::Load()
         m_Mode = (Mode)mode;
         f.Read( m_NumCPUsToUse );
         f.Read( m_StartMinimized );
+        if (header [ 3 ] >= 4)
+        {
+            f.Read( m_GracePeriod );
+            f.Read( m_BlockingProcessNames );
+            f.Read( m_BlockingGracePeriod );
+        }
     }
 }
 
@@ -111,6 +140,9 @@ void WorkerSettings::Save()
         ok &= f.Write( (uint32_t)m_Mode );
         ok &= f.Write( m_NumCPUsToUse );
         ok &= f.Write( m_StartMinimized );
+        ok &= f.Write( m_GracePeriod );
+        ok &= f.Write( m_BlockingProcessNames );
+        ok &= f.Write( m_BlockingGracePeriod );
 
         if ( ok )
         {

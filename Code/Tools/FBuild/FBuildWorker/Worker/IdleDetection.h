@@ -22,27 +22,43 @@ public:
     ~IdleDetection();
 
     // returns true if idle
-    void Update();
+    void Update( const Array<AString>& blockingProcessNames, const Array<uint32_t>& addedBlockingPid, const Array<uint32_t>& removedBlockingPid );
 
     // query status
     inline bool IsIdle() const { return m_IsIdle; }
     inline float IsIdleFloat() const { return m_IsIdleFloat; }
+    inline bool IsBlocked() const { return m_IsBlocked; }
+    size_t GetNumBlockingProcesses() const { return m_NumBlockingProcesses; }
+
+    // query status
+    inline bool AddBlockingProcess(uint32_t pid);
+    inline bool RemoveBlockingProcess(uint32_t pid);
+    inline float GetCPUUsageFASTBuild() const { return m_CPUUsageFASTBuild; }
+    inline float GetCPUUsageTotal() const { return m_CPUUsageTotal; }
 
 private:
     // struct to track processes with
     struct ProcessInfo
     {
         inline bool operator == ( uint32_t pid ) const { return m_PID == pid; }
-
+        inline bool operator < ( uint32_t pid ) const { return m_PID < pid; }
+        inline bool operator < ( const ProcessInfo& b ) const { return m_PID < b.m_PID; }
+        enum : uint16_t
+        {
+            FLAG_SELF             = 1 << 0,
+            FLAG_IN_OUR_HIERARCHY = 1 << 1,
+            FLAG_BLOCKING         = 1 << 2,
+        };
         uint32_t    m_PID;
-        uint32_t    m_AliveValue;
+        uint16_t    m_AliveValue;
+        uint16_t    m_Flags;
         #if defined( __WINDOWS__ )
             void *      m_ProcessHandle;
         #endif
         uint64_t    m_LastTime;
     };
 
-    bool IsIdleInternal( float & idleCurrent );
+    bool IsIdleInternal( float & idleCurrent, const Array<AString>& blockingProcessNames, const Array<uint32_t>& addedBlockingPid, const Array<uint32_t>& removedBlockingPid );
 
     static void GetSystemTotalCPUUsage( uint64_t & outIdleTime,
                                         uint64_t & outKernTime,
@@ -50,11 +66,8 @@ private:
     static void GetProcessTime( const ProcessInfo & pi,
                                 uint64_t & outKernTime,
                                 uint64_t & outUserTime );
-    void UpdateProcessList();
-    #if defined( __LINUX__ )
-        static bool GetProcessInfoString( const char * fileName,
-                                          AStackString< 1024 > & outProcessInfoString );
-    #endif
+    void UpdateProcessList( const Array<AString>& blockingProcessNames, const Array<uint32_t>& addedBlockingPid, const Array<uint32_t>& removedBlockingPid );
+    bool IsBlocking( const char* processName, const Array<AString>& blockingProcessNames );
 
     Timer   m_Timer;
     float   m_CPUUsageFASTBuild;
@@ -64,7 +77,9 @@ private:
     float   m_IsIdleCurrent;
     int32_t m_IdleSmoother;
     int32_t m_IdleFloatSmoother;
-    Array< ProcessInfo > m_ProcessesInOurHierarchy;
+    bool    m_IsBlocked;
+    int32_t m_NumBlockingProcesses;
+    SortedArray< ProcessInfo > m_Processes;
     uint64_t m_LastTimeIdle;
     uint64_t m_LastTimeBusy;
 };

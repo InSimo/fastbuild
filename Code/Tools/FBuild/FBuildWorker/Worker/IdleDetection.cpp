@@ -30,6 +30,8 @@
 //------------------------------------------------------------------------------
 #define IDLE_DETECTION_THRESHOLD_PERCENT ( 20.0f )
 #define IDLE_CHECK_DELAY_SECONDS ( 0.1f )
+// Delay between updates when specific processes are running that require exclusive use of the computer
+#define IDLE_CHECK_DELAY_SECONDS_BLOCKED ( 30.0f )
 
 // CONSTRUCTOR
 //------------------------------------------------------------------------------
@@ -41,7 +43,9 @@ IdleDetection::IdleDetection()
     , m_IsIdleCurrent ( 0.0f )
     , m_IdleSmoother( 0 )
     , m_IdleFloatSmoother ( 0 )
-    , m_ProcessesInOurHierarchy( 32, true )
+    , m_IsBlocked( false )
+    , m_NumBlockingProcesses( 0 )
+    , m_Processes( 32, true )
     , m_LastTimeIdle( 0 )
     , m_LastTimeBusy( 0 )
 {
@@ -52,7 +56,8 @@ IdleDetection::IdleDetection()
         self.m_ProcessHandle = ::GetCurrentProcess();
     #endif
     self.m_LastTime = 0;
-    m_ProcessesInOurHierarchy.Append( self );
+    self.m_Flags = ProcessInfo::FLAG_SELF | ProcessInfo::FLAG_IN_OUR_HIERARCHY;
+    m_Processes.Append( self );
 }
 
 // DESTRUCTOR
@@ -61,10 +66,10 @@ IdleDetection::~IdleDetection() = default;
 
 // Update
 //------------------------------------------------------------------------------
-void IdleDetection::Update()
+void IdleDetection::Update( const Array<AString>& blockingProcessNames, const Array<uint32_t>& addedBlockingPid, const Array<uint32_t>& removedBlockingPid )
 {
     // apply smoothing based on current "idle" state
-    if ( IsIdleInternal( m_IsIdleCurrent ) )
+    if ( IsIdleInternal( m_IsIdleCurrent, blockingProcessNames, addedBlockingPid, removedBlockingPid ) )
     {
         ++m_IdleSmoother;
     }
@@ -104,8 +109,14 @@ void IdleDetection::Update()
 
 //
 //------------------------------------------------------------------------------
-bool IdleDetection::IsIdleInternal( float & idleCurrent )
+bool IdleDetection::IsIdleInternal( float & idleCurrent, const Array<AString>& blockingProcessNames, const Array<uint32_t>& addedBlockingPid, const Array<uint32_t>& removedBlockingPid )
 {
+    float elasped = m_Timer.GetElapsed();
+    if (m_IsBlocked && elasped < IDLE_CHECK_DELAY_SECONDS_BLOCKED )
+    {
+        idleCurrent = 0.0f;
+        return false;
+    }
     // determine total cpu time (including idle)
     uint64_t systemTime = 0;
     {
@@ -127,7 +138,8 @@ bool IdleDetection::IsIdleInternal( float & idleCurrent )
 
     // if the total CPU time is below the idle theshold, we don't need to
     // check to know acurately what the cpu use of FASTBuild is
-    if ( m_CPUUsageTotal < IDLE_DETECTION_THRESHOLD_PERCENT )
+    // unless there are specific processes that are potentially blocking, in which case we should stop quickly
+    if ( m_CPUUsageTotal < IDLE_DETECTION_THRESHOLD_PERCENT && blockingProcessNames.IsEmpty() )
     {
         m_CPUUsageFASTBuild = 0.0f;
         idleCurrent = 1.0f;
@@ -135,41 +147,51 @@ bool IdleDetection::IsIdleInternal( float & idleCurrent )
     }
 
     // reduce check frequency
-    if (m_Timer.GetElapsed() > IDLE_CHECK_DELAY_SECONDS )
+    if (elasped > IDLE_CHECK_DELAY_SECONDS )
     {
         // iterate all processes
-        UpdateProcessList();
+        UpdateProcessList( blockingProcessNames, addedBlockingPid, removedBlockingPid );
 
         // accumulate cpu usage for processes we care about
         if (systemTime) // skip first update
         {
             float totalPerc(0.0f);
+            uint32_t numBlocking = 0;
 
-            for ( ProcessInfo & pi : m_ProcessesInOurHierarchy)
+            for ( ProcessInfo & pi : m_Processes)
             {
-                uint64_t kernTime = 0;
-                uint64_t userTime = 0;
-                GetProcessTime( pi, kernTime, userTime );
-
-                const uint64_t totalTime = (userTime + kernTime);
-                const uint64_t lastTime = pi.m_LastTime;
-                if (lastTime != 0) // ignore first update
+                if ( ( pi.m_Flags & ProcessInfo::FLAG_IN_OUR_HIERARCHY ) != 0 )
                 {
-                    const uint64_t timeSpent = (totalTime - lastTime);
-                    float perc = (float)((double)timeSpent / (double)systemTime) * 100.0f;
-                    totalPerc += perc;
+                    uint64_t kernTime = 0;
+                    uint64_t userTime = 0;
+                    GetProcessTime( pi, kernTime, userTime );
+
+                    const uint64_t totalTime = (userTime + kernTime);
+                    const uint64_t lastTime = pi.m_LastTime;
+                    if (lastTime != 0) // ignore first update
+                    {
+                        const uint64_t timeSpent = (totalTime - lastTime);
+                        float perc = (float)((double)timeSpent / (double)systemTime) * 100.0f;
+                        totalPerc += perc;
+                    }
+                    pi.m_LastTime = totalTime;
                 }
-                pi.m_LastTime = totalTime;
+                else if ( ( pi.m_Flags & ProcessInfo::FLAG_BLOCKING ) != 0 )
+                {
+                    ++numBlocking;
+                }
             }
 
             m_CPUUsageFASTBuild = totalPerc;
+            m_NumBlockingProcesses = numBlocking;
+            m_IsBlocked = (numBlocking > 0);
         }
 
         m_Timer.Start();
     }
 
     idleCurrent = ( 1.0f - ( ( m_CPUUsageTotal - m_CPUUsageFASTBuild ) * 0.01f ) );
-    return ( ( m_CPUUsageTotal - m_CPUUsageFASTBuild ) < IDLE_DETECTION_THRESHOLD_PERCENT );
+    return ( ! m_IsBlocked && ( ( m_CPUUsageTotal - m_CPUUsageFASTBuild ) < IDLE_DETECTION_THRESHOLD_PERCENT ) );
 }
 
 // GetSystemTotalCPUUsage
@@ -195,7 +217,7 @@ bool IdleDetection::IsIdleInternal( float & idleCurrent )
     #elif defined( __LINUX__ )
         // Read first line of /proc/stat
         AStackString< 1024 > procStat;
-        VERIFY( GetProcessInfoString( "/proc/stat", procStat ) ); // Should never fail
+        VERIFY( Process::GetProcessInfoString( "/proc/stat", procStat ) ); // Should never fail
 
         // First line should be system totals
         if ( procStat.BeginsWithI( "cpu" ) )
@@ -261,7 +283,7 @@ bool IdleDetection::IsIdleInternal( float & idleCurrent )
     #elif defined( __LINUX__ )
         // Read first line of /proc/<pid>/stat for the process
         AStackString< 1024 > processInfo;
-        if ( GetProcessInfoString( AStackString<>().Format( "/proc/%u/stat", pi.m_PID ).Get(),
+        if ( Process::GetProcessInfoString( AStackString<>().Format( "/proc/%u/stat", pi.m_PID ).Get(),
                                    processInfo ) )
         {
             Array< AString > tokens( 32, true );
@@ -286,12 +308,25 @@ bool IdleDetection::IsIdleInternal( float & idleCurrent )
     #endif
 }
 
+// IsBlocking
+//------------------------------------------------------------------------------
+bool IdleDetection::IsBlocking( const char* processName, const Array<AString>& blockingProcessNames )
+{
+    uint32_t len = (uint32_t)AString::StrLen( processName );
+    for ( const AString& s : blockingProcessNames )
+    {
+        if ( s.GetLength() <= len && AString::StrNCmpI( processName, s.Get(), s.GetLength() ) == 0 )
+            return true;
+    }
+    return false;
+}
+
 // UpdateProcessList
 //------------------------------------------------------------------------------
-void IdleDetection::UpdateProcessList()
+void IdleDetection::UpdateProcessList( const Array<AString>& blockingProcessNames, const Array<uint32_t>& addedBlockingPid, const Array<uint32_t>& removedBlockingPid )
 {
     // Mark processes we've seen so we can prune them when they terminate
-    static uint32_t sAliveValue = 0;
+    static uint16_t sAliveValue = 0;
     sAliveValue++;
 
     #if defined( __WINDOWS__ )
@@ -306,19 +341,20 @@ void IdleDetection::UpdateProcessList()
         thProcessInfo.dwSize = sizeof(PROCESSENTRY32);
         while ( Process32Next( hSnapShot, &thProcessInfo ) != FALSE )
         {
-            const uint32_t parentPID = thProcessInfo.th32ParentProcessID;
-
-            // is process a child of one we care about?
-            if ( m_ProcessesInOurHierarchy.Find( parentPID ) )
+            const uint32_t pid = thProcessInfo.th32ProcessID;
+            ProcessInfo * info = m_Processes.Find( pid );
+            if ( info )
             {
-                const uint32_t pid = thProcessInfo.th32ProcessID;
-                ProcessInfo * info = m_ProcessesInOurHierarchy.Find( pid );
-                if ( info )
-                {
-                    // an existing process that is still alive
-                    info->m_AliveValue = sAliveValue; // still active
-                }
-                else
+                // an existing process that is still alive
+                info->m_AliveValue = sAliveValue; // still active
+            }
+            else
+            {
+                const uint32_t parentPID = thProcessInfo.th32ParentProcessID;
+
+                // is process a child of one we care about?
+                ProcessInfo * parentInfo = m_Processes.Find( parentPID );
+                if ( parentInfo && ( parentInfo->m_Flags & ProcessInfo::FLAG_IN_OUR_HIERARCHY ) != 0 )
                 {
                     // a new process
                     void * handle = OpenProcess( PROCESS_ALL_ACCESS, TRUE, pid );
@@ -330,13 +366,27 @@ void IdleDetection::UpdateProcessList()
                         newProcess.m_ProcessHandle = handle;
                         newProcess.m_AliveValue = sAliveValue;
                         newProcess.m_LastTime = 0;
-                        m_ProcessesInOurHierarchy.Append( newProcess );
+                        newProcess.m_Flags = ProcessInfo::FLAG_IN_OUR_HIERARCHY;
+                        m_Processes.Append( newProcess );
                     }
                     else
                     {
                         // gracefully handle failure to open proces
                         // maybe it closed before we got to it
                     }
+                }
+                else
+                {
+                    // track new process
+                    ProcessInfo newProcess;
+                    newProcess.m_PID = pid;
+                    newProcess.m_ProcessHandle = nullptr;
+                    newProcess.m_AliveValue = sAliveValue;
+                    newProcess.m_LastTime = 0;
+                    newProcess.m_Flags = 0;
+                    if ( IsBlocking( thProcessInfo.szExeFile, blockingProcessNames ) )
+                        newProcess.m_Flags |= ProcessInfo::FLAG_BLOCKING;
+                    m_Processes.Append( newProcess );
                 }
             }
         }
@@ -402,30 +452,39 @@ void IdleDetection::UpdateProcessList()
                 // Filename is PID
                 const uint32_t pid = strtoul( entry->d_name, nullptr, 10 );
 
-                // Read the first line of /proc/<pid>/stat for the process
-                AStackString< 1024 > processInfo;
-                if ( GetProcessInfoString( AStackString<>().Format( "/proc/%u/stat", pid ).Get(),
-                                           processInfo ) == false )
+                ProcessInfo * info = m_Processes.Find( pid );
+                if ( info )
                 {
-                    continue; // Process might have exited
+                    // an existing process that is still alive
+                    info->m_AliveValue = sAliveValue; // still active
                 }
-
-                // Item index 3 (0-based) is the parent PID
-                Array< AString > tokens( 32, true );
-                processInfo.Tokenize( tokens, ' ' );
-                const uint32_t parentPID = strtoul( tokens[ 3 ].Get(), nullptr, 10 );
-
-                // is process a child of one we care about?
-                if ( m_ProcessesInOurHierarchy.Find( parentPID ) )
+                else
                 {
-                    ASSERT( pid == strtoul( tokens[ 0 ].Get(), nullptr, 10 ) ); // Item index 0 (0-based) is the PID
-
-                    // Are we already tracking this process?
-                    ProcessInfo * info = m_ProcessesInOurHierarchy.Find( pid );
-                    if ( info )
+                    // Read the first line of /proc/<pid>/stat for the process
+                    AStackString< 1024 > processInfo;
+                    if ( Process::GetProcessInfoString( AStackString<>().Format( "/proc/%u/stat", pid ).Get(),
+                                            processInfo ) == false )
                     {
-                        // an existing process that is still alive
-                        info->m_AliveValue = sAliveValue; // still active
+                        continue; // Process might have exited
+                    }
+
+                    // Item index 3 (0-based) is the parent PID
+                    Array< AString > tokens( 32, true );
+                    processInfo.Tokenize( tokens, ' ' );
+                    ASSERT( pid == strtoul( tokens[ 0 ].Get(), nullptr, 10 ) ); // Item index 0 (0-based) is the PID
+                    const uint32_t parentPID = strtoul( tokens[ 3 ].Get(), nullptr, 10 );
+
+                    // is process a child of one we care about?
+                    ProcessInfo * parentInfo = m_Processes.Find( parentPID );
+                    if ( parentInfo && ( parentInfo->m_Flags & ProcessInfo::FLAG_IN_OUR_HIERARCHY ) != 0 )
+                    {
+                        // track new process
+                        ProcessInfo newProcess;
+                        newProcess.m_PID = pid;
+                        newProcess.m_AliveValue = sAliveValue;
+                        newProcess.m_LastTime = 0;
+                        newProcess.m_Flags = ProcessInfo::FLAG_IN_OUR_HIERARCHY;
+                        m_Processes.Append( newProcess );
                     }
                     else
                     {
@@ -434,7 +493,11 @@ void IdleDetection::UpdateProcessList()
                         newProcess.m_PID = pid;
                         newProcess.m_AliveValue = sAliveValue;
                         newProcess.m_LastTime = 0;
-                        m_ProcessesInOurHierarchy.Append( newProcess );
+                        newProcess.m_Flags = 0;
+                        const AString& exeName = tokens[ 1 ];
+                        if ( IsBlocking( exeName.Get() + 1, blockingProcessNames ) )
+                            newProcess.m_Flags |= ProcessInfo::FLAG_BLOCKING;
+                        m_Processes.Append( newProcess );
                     }
                 }
             }
@@ -445,52 +508,42 @@ void IdleDetection::UpdateProcessList()
     // prune dead processes
     {
         // never prune first process (this process)
-        const size_t numProcesses = m_ProcessesInOurHierarchy.GetSize();
-        for ( size_t i = (numProcesses - 1); i > 0; --i )
+        const int numProcesses = (int)m_Processes.GetSize();
+        for ( int i = (numProcesses - 1); i >= 0; --i )
         {
-            if ( m_ProcessesInOurHierarchy[i].m_AliveValue != sAliveValue )
+            if ( m_Processes[i].m_AliveValue != sAliveValue && ( m_Processes[i].m_Flags & ProcessInfo::FLAG_SELF ) == 0 )
             {
                 // dead process
                 #if defined( __WINDOWS__ )
-                    CloseHandle( m_ProcessesInOurHierarchy[ i ].m_ProcessHandle );
+                    CloseHandle( m_Processes[ i ].m_ProcessHandle );
                 #endif
-                m_ProcessesInOurHierarchy.EraseIndex( i );
+                m_Processes.EraseIndex( i );
+            }
+        }
+    }
+    // handle blocking requests
+    if ( ! addedBlockingPid.IsEmpty() )
+    {
+        for ( uint32_t pid : addedBlockingPid )
+        {
+            ProcessInfo* info = m_Processes.Find(pid);
+            if (info)
+            {
+                info->m_Flags |= ProcessInfo::FLAG_BLOCKING;
+            }
+        }
+    }
+    if ( ! removedBlockingPid.IsEmpty() )
+    {
+        for ( uint32_t pid : removedBlockingPid )
+        {
+            ProcessInfo* info = m_Processes.Find(pid);
+            if (info)
+            {
+                info->m_Flags &= ~ProcessInfo::FLAG_BLOCKING;
             }
         }
     }
 }
-
-// GetProcessInfoString
-//------------------------------------------------------------------------------
-#if defined( __LINUX__ )
-    /*static*/ bool IdleDetection::GetProcessInfoString( const char * fileName,
-                                                         AStackString< 1024 > & outProcessInfoString )
-    {
-        // Open the file
-        FileStream f;
-        if ( f.Open( fileName, FileStream::READ_ONLY ) == false )
-        {
-            return false;
-        }
-
-        // Try to read 1KiB
-        outProcessInfoString.SetLength( 1024 );
-        const uint32_t len = f.ReadBuffer( outProcessInfoString.Get(), outProcessInfoString.GetLength() );
-        outProcessInfoString.SetLength( len );
-
-        // Truncate to the first line
-        const char * lineEnd = outProcessInfoString.Find( '\n' );
-        if ( lineEnd )
-        {
-            outProcessInfoString.SetLength( lineEnd - outProcessInfoString.Get() );
-            return true;
-        }
-
-        // Line was too long or there was some other problem
-        ASSERT( false && "Unexpected proc file size");
-        outProcessInfoString.Clear();
-        return false;
-    }
-#endif
 
 //------------------------------------------------------------------------------
