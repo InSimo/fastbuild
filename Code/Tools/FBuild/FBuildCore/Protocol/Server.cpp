@@ -18,12 +18,16 @@
 #include "Core/Process/Atomic.h"
 #include "Core/Profile/Profile.h"
 #include "Core/Strings/AStackString.h"
+#include "Core/Math/Conversions.h"
 
 // CONSTRUCTOR
 //------------------------------------------------------------------------------
 Server::Server( uint32_t numThreadsInJobQueue )
     : m_ShouldExit( false )
     , m_ClientList( 32, true )
+    , m_RequestedServerInfoLevel( 0 )
+    , m_RequestedMode( 0xffffffff )
+    , m_RequestedKillAfter( 0 )
 {
     m_JobQueueRemote = FNEW( JobQueueRemote( numThreadsInJobQueue ? numThreadsInJobQueue : Env::GetNumProcessors() ) );
 
@@ -262,6 +266,30 @@ bool Server::IsSynchingTool( AString & statusStr ) const
             Process( connection, msg, payload, payloadSize );
             break;
         }
+        case Protocol::MSG_REQUEST_SERVER_INFO:
+        {
+            const Protocol::MsgRequestServerInfo * msg = static_cast< const Protocol::MsgRequestServerInfo * >( imsg );
+            Process( connection, msg );
+            break;
+        }
+        case Protocol::MSG_SET_MODE:
+        {
+            const Protocol::MsgSetMode * msg = static_cast< const Protocol::MsgSetMode * >( imsg );
+            Process( connection, msg );
+            break;
+        }
+        case Protocol::MSG_ADD_BLOCKING_PROCESS:
+        {
+            const Protocol::MsgAddBlockingProcess * msg = static_cast< const Protocol::MsgAddBlockingProcess * >( imsg );
+            Process( connection, msg );
+            break;
+        }
+        case Protocol::MSG_REMOVE_BLOCKING_PROCESS:
+        {
+            const Protocol::MsgRemoveBlockingProcess * msg = static_cast< const Protocol::MsgRemoveBlockingProcess * >( imsg );
+            Process( connection, msg );
+            break;
+        }
         default:
         {
             // unknown message type
@@ -453,6 +481,70 @@ void Server::Process( const ConnectionInfo * connection, const Protocol::MsgFile
     // ToolChain is now synchronized
     // Allow any jobs that were waiting on it to start
     CheckWaitingJobs( manifest );
+}
+
+// Process( MsgRequestServerInfo )
+//----------------------------------------------------------------------
+void Server::Process( const ConnectionInfo * connection, const Protocol::MsgRequestServerInfo * msg )
+{
+    ClientState * cs = (ClientState *)connection->GetUserData();
+    {
+        MutexHolder mh( cs->m_Mutex );
+        cs->m_RequestedServerInfoLevel = msg->GetDetailsLevel();
+    }
+    {
+        MutexHolder mh( m_RequestsMutex );
+        m_RequestedServerInfoLevel = Math::Max( m_RequestedServerInfoLevel, msg->GetDetailsLevel() );
+    }
+    // Wake main thread to request info
+    JobQueueRemote::Get().WakeMainThread();
+}
+
+// Process( MsgSetMode )
+//----------------------------------------------------------------------
+void Server::Process( const ConnectionInfo * connection, const Protocol::MsgSetMode * msg )
+{
+    (void)connection;
+    MutexHolder mh( m_RequestsMutex );
+    m_RequestedMode = msg->GetMode();
+    uint16_t gracePeriod = msg->GetGracePeriod();
+    if (gracePeriod != 0)
+    {
+        uint64_t killAfter = Timer::GetNow() + gracePeriod * Timer::GetFrequency();
+        if (m_RequestedKillAfter == 0 || m_RequestedKillAfter > killAfter)
+            m_RequestedKillAfter = killAfter;
+    }
+    // Wake main thread to handle requested change
+    JobQueueRemote::Get().WakeMainThread();
+}
+
+// Process( MsgAddBlockingProcess )
+//----------------------------------------------------------------------
+void Server::Process( const ConnectionInfo * connection, const Protocol::MsgAddBlockingProcess * msg )
+{
+    (void)connection;
+    MutexHolder mh( m_RequestsMutex );
+    m_AddedBlockingPid.Append(msg->GetPid());
+    uint16_t gracePeriod = msg->GetGracePeriod();
+    if (gracePeriod != 0)
+    {
+        uint64_t killAfter = Timer::GetNow() + gracePeriod * Timer::GetFrequency();
+        if (m_RequestedKillAfter == 0 || m_RequestedKillAfter > killAfter)
+            m_RequestedKillAfter = killAfter;
+    }
+    // Wake main thread to handle requested change
+    JobQueueRemote::Get().WakeMainThread();
+}
+
+// Process( MsgRemoveBlockingProcess )
+//----------------------------------------------------------------------
+void Server::Process( const ConnectionInfo * connection, const Protocol::MsgRemoveBlockingProcess * msg )
+{
+    (void)connection; // TODO
+    MutexHolder mh( m_RequestsMutex );
+    m_RemovedBlockingPid.Append(msg->GetPid());
+    // Wake main thread to handle requested change
+    JobQueueRemote::Get().WakeMainThread();
 }
 
 // CheckWaitingJobs
@@ -676,6 +768,83 @@ void Server::RequestMissingFiles( const ConnectionInfo * connection, ToolManifes
             manifest->SetUserData( (void *)connection );
         }
     }
+}
+
+// GetRequestedServerInfoLevel
+//------------------------------------------------------------------------------
+uint8_t Server::GetRequestedServerInfoLevel()
+{
+
+    PROFILE_FUNCTION
+
+    MutexHolder mh( m_RequestsMutex );
+
+    return m_RequestedServerInfoLevel;
+}
+
+// SendServerInfo
+//------------------------------------------------------------------------------
+void Server::SendServerInfo( const Protocol::MsgServerInfo & msg, const MemoryStream & payload )
+{
+
+    PROFILE_FUNCTION
+
+    static MemoryStream empty;
+    {
+        MutexHolder mh( m_ClientListMutex );
+
+        ClientState ** iter = m_ClientList.Begin();
+        const ClientState * const * end = m_ClientList.End();
+        for ( ; iter != end; ++iter )
+        {
+            ClientState * cs = *iter;
+            MutexHolder mh2( cs->m_Mutex );
+            if ( cs->m_RequestedServerInfoLevel )
+            {
+                // send server info to this client
+                msg.Send( cs->m_Connection, cs->m_RequestedServerInfoLevel > 1 ? payload : empty );
+                cs->m_RequestedServerInfoLevel = 0;
+            }
+        }
+    }
+    {
+        MutexHolder mh( m_RequestsMutex );
+        m_RequestedServerInfoLevel = 0;
+    }
+}
+
+// GetRequestedChanges
+//------------------------------------------------------------------------------
+bool Server::GetRequestedChanges( uint32_t& mode, Array<uint32_t>& addedBlockingPid, Array<uint32_t>& removedBlockingPid, uint64_t& killAfter )
+{
+
+    PROFILE_FUNCTION
+
+    MutexHolder mh( m_RequestsMutex );
+    bool res = false;
+    if ( m_RequestedMode != 0xffffffff )
+    {
+        mode = m_RequestedMode;
+        m_RequestedMode = 0xffffffff;
+        res = true;
+    }
+    if ( ! m_AddedBlockingPid.IsEmpty() )
+    {
+        addedBlockingPid = Move( m_AddedBlockingPid );
+        res = true;
+    }
+    if ( ! m_RemovedBlockingPid.IsEmpty() )
+    {
+        removedBlockingPid = Move( m_RemovedBlockingPid );
+        res = true;
+    }
+    if ( m_RequestedKillAfter != 0 )
+    {
+        killAfter = m_RequestedKillAfter;
+        m_RequestedKillAfter = 0;
+        res = true;
+    }
+    return res;
 }
 
 //------------------------------------------------------------------------------

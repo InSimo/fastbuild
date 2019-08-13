@@ -372,6 +372,12 @@ void Client::SendMessageInternal( const ConnectionInfo * connection, const Proto
             Process( connection, msg );
             break;
         }
+        case Protocol::MSG_SERVER_INFO:
+        {
+            const Protocol::MsgServerInfo * msg = static_cast< const Protocol::MsgServerInfo * >( imsg );
+            Process( connection, msg, payload, payloadSize );
+            break;
+        }
         default:
         {
             // unknown message type
@@ -714,6 +720,44 @@ void Client::Process( const ConnectionInfo * connection, const Protocol::MsgRequ
     resultMsg.Send( connection, ms );
 }
 
+// Process( MsgServerInfo )
+//------------------------------------------------------------------------------
+void Client::Process( const ConnectionInfo * connection, const Protocol::MsgServerInfo * msg, const void * payload, size_t payloadSize )
+{
+    PROFILE_SECTION( "MsgServerInfo" )
+
+    // find server
+    ServerState * ss = (ServerState *)connection->GetUserData();
+    ASSERT( ss );
+
+    // lock the server state
+    MutexHolder mhSS( ss->m_Mutex );
+
+    ss->m_InfoTimeStamp = Timer::GetNow();
+    ss->m_InfoMode = msg->GetMode();
+    ss->m_InfoNumClients = msg->GetNumClients();
+    ss->m_InfoNumCPUTotal = msg->GetNumCPUTotal();
+    ss->m_InfoNumCPUAvailable = msg->GetNumCPUAvailable();
+    ss->m_InfoNumCPUBusy = msg->GetNumCPUBusy();
+    ss->m_InfoNumBlockingProcesses = msg->GetNumBlockingProcesses();
+    ss->m_InfoCPUUsageFASTBuild = msg->GetCPUUsageFASTBuild();
+    ss->m_InfoCPUUsageTotal = msg->GetCPUUsageTotal();
+
+    ConstMemoryStream ms( payload, payloadSize );
+    size_t numCPUs = ss->m_InfoNumCPUTotal;
+    ss->m_InfoWorkerIdle.SetSize( numCPUs );
+    ss->m_InfoWorkerBusy.SetSize( numCPUs );
+    ss->m_InfoHostNames.SetSize( numCPUs );
+    ss->m_InfoJobStatus.SetSize( numCPUs );
+    for ( size_t i=0; i<numCPUs; ++i )
+    {
+        ms.Read( ss->m_InfoWorkerIdle[i] );
+        ms.Read( ss->m_InfoWorkerBusy[i] );
+        ms.Read( ss->m_InfoHostNames[i] );
+        ms.Read( ss->m_InfoJobStatus[i] );
+    }
+}
+
 // FindManifest
 //------------------------------------------------------------------------------
 const ToolManifest * Client::FindManifest( const ConnectionInfo * connection, uint64_t toolId ) const
@@ -759,6 +803,7 @@ Client::ServerState::ServerState()
     , m_NumJobsAvailable( 0 )
     , m_Jobs( 16, true )
     , m_Blacklisted( false )
+    , m_InfoTimeStamp( 0 )
 {
     m_DelayTimer.Start( 999.0f );
 }

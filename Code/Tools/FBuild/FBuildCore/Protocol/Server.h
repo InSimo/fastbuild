@@ -11,6 +11,7 @@
 //------------------------------------------------------------------------------
 class Job;
 class JobQueueRemote;
+class MemoryStream;
 namespace Protocol
 {
     class IMessage;
@@ -20,6 +21,13 @@ namespace Protocol
     class MsgNoJobAvailable;
     class MsgStatus;
     class MsgFile;
+    class MsgRequestServerInfo;
+    class MsgSetMode;
+    class MsgRequestServerInfo;
+    class MsgServerInfo;
+    class MsgSetMode;
+    class MsgAddBlockingProcess;
+    class MsgRemoveBlockingProcess;
 }
 class ToolManifest;
 
@@ -35,6 +43,11 @@ public:
 
     bool IsSynchingTool( AString & statusStr ) const;
 
+    uint8_t GetRequestedServerInfoLevel();
+    void SendServerInfo( const Protocol::MsgServerInfo & msg, const MemoryStream & payload );
+
+    bool GetRequestedChanges( uint32_t& mode, Array<uint32_t>& addedBlockingPid, Array<uint32_t>& removedBlockingPid, uint64_t& killAfter );
+
 private:
     // TCPConnection interface
     virtual void OnConnected( const ConnectionInfo * connection );
@@ -48,6 +61,10 @@ private:
     void Process( const ConnectionInfo * connection, const Protocol::MsgJob * msg, const void * payload, size_t payloadSize );
     void Process( const ConnectionInfo * connection, const Protocol::MsgManifest * msg, const void * payload, size_t payloadSize );
     void Process( const ConnectionInfo * connection, const Protocol::MsgFile * msg, const void * payload, size_t payloadSize );
+    void Process( const ConnectionInfo * connection, const Protocol::MsgRequestServerInfo * msg );
+    void Process( const ConnectionInfo * connection, const Protocol::MsgSetMode * msg );
+    void Process( const ConnectionInfo * connection, const Protocol::MsgAddBlockingProcess * msg );
+    void Process( const ConnectionInfo * connection, const Protocol::MsgRemoveBlockingProcess * msg );
 
     static uint32_t ThreadFuncStatic( void * param );
     void            ThreadFunc();
@@ -60,7 +77,7 @@ private:
 
     struct ClientState
     {
-        explicit ClientState( const ConnectionInfo * ci ) : m_CurrentMessage( nullptr ), m_Connection( ci ), m_NumJobsAvailable( 0 ), m_NumJobsRequested( 0 ), m_NumJobsActive( 0 ), m_WaitingJobs( 16, true ) {}
+        explicit ClientState( const ConnectionInfo * ci ) : m_CurrentMessage( nullptr ), m_Connection( ci ), m_NumJobsAvailable( 0 ), m_NumJobsRequested( 0 ), m_NumJobsActive( 0 ), m_WaitingJobs( 16, true ), m_RequestedServerInfoLevel( 0 ) {}
 
         inline bool operator < ( const ClientState & other ) const { return ( m_NumJobsAvailable > other.m_NumJobsAvailable ); }
 
@@ -77,6 +94,8 @@ private:
         Array< Job * >          m_WaitingJobs; // jobs waiting for manifests/toolchains
 
         Timer                   m_StatusTimer;
+
+        uint8_t                 m_RequestedServerInfoLevel;
     };
 
     JobQueueRemote *        m_JobQueueRemote;
@@ -88,6 +107,13 @@ private:
 
     mutable Mutex           m_ToolManifestsMutex;
     Array< ToolManifest * > m_Tools;
+
+    mutable Mutex           m_RequestsMutex;
+    uint8_t                 m_RequestedServerInfoLevel;
+    uint32_t                m_RequestedMode;
+    uint64_t                m_RequestedKillAfter;
+    Array<uint32_t>         m_AddedBlockingPid;
+    Array<uint32_t>         m_RemovedBlockingPid;
 };
 
 //------------------------------------------------------------------------------

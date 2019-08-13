@@ -29,7 +29,7 @@ class TCPConnectionPool;
 namespace Protocol
 {
     enum : uint16_t { PROTOCOL_PORT = 31264 }; // Arbitrarily chosen port
-    enum { PROTOCOL_VERSION = 20 };
+    enum { PROTOCOL_VERSION = 21 };
 
     enum { PROTOCOL_TEST_PORT = PROTOCOL_PORT + 1 }; // Different port for use by tests
 
@@ -51,6 +51,12 @@ namespace Protocol
 
         MSG_REQUEST_FILE        = 9, // Server -> Client : Ask client for a file
         MSG_FILE                = 10,// Server <- Client : Send a requested file
+
+        MSG_REQUEST_SERVER_INFO = 11, // Server <- Client : Request info on current server state (mode, jobs)
+        MSG_SERVER_INFO         = 12, // Server -> Client : Repond to info request
+        MSG_SET_MODE            = 13, // Server <- Client : Change the current mode
+        MSG_ADD_BLOCKING_PROCESS = 14, // Server <- Client : Change the current mode
+        MSG_REMOVE_BLOCKING_PROCESS = 15, // Server <- Client : Change the current mode
 
         NUM_MESSAGES            // leave last
     };
@@ -227,6 +233,95 @@ namespace Protocol
         MsgServerStatus();
     };
     static_assert( sizeof( MsgServerStatus ) == sizeof( IMessage ), "MsgServerStatus message has incorrect size" );
+
+    // MsgRequestServerInfo
+    //------------------------------------------------------------------------------
+    class MsgRequestServerInfo : public IMessage
+    {
+    public:
+        MsgRequestServerInfo( uint8_t detailsLevel );
+
+        inline uint8_t GetDetailsLevel() const { return m_DetailsLevel; }
+    private:
+        uint8_t m_DetailsLevel;
+        char    m_Padding2[ 3 ];
+    };
+    static_assert( sizeof( MsgRequestServerInfo ) == sizeof( IMessage ) + 1 + 3, "MsgRequestServerInfo message has incorrect size" );
+
+    // MsgServerInfo
+    //------------------------------------------------------------------------------
+    class MsgServerInfo : public IMessage
+    {
+    public:
+        MsgServerInfo( uint8_t mode, uint16_t numClients, uint16_t numCPUTotal,
+                       uint16_t numCPUAvailable, uint16_t numCPUBusy, uint16_t numBlockingProcesses,
+                       float cpuUsageFASTBuild, float cpuUsageTotal );
+
+        inline uint8_t  GetMode() const { return m_Mode; }
+        inline uint16_t GetNumCPUTotal() const { return m_NumCPUTotal; }
+        inline uint16_t GetNumCPUAvailable() const { return m_NumCPUAvailable; }
+        inline uint16_t GetNumCPUBusy() const { return m_NumCPUBusy; }
+        inline uint16_t GetNumClients() const { return m_NumClients; }
+        inline uint16_t GetNumBlockingProcesses() const { return m_NumBlockingProcesses; }
+        inline float    GetCPUUsageFASTBuild() const { return m_CPUUsageFASTBuild; }
+        inline float    GetCPUUsageTotal() const { return m_CPUUsageTotal; }
+    private:
+        uint8_t  m_Mode;
+        char     m_Padding2[ 1 ];
+        uint16_t m_NumClients;
+        uint16_t m_NumCPUTotal;
+        uint16_t m_NumCPUAvailable;
+        uint16_t m_NumCPUBusy;
+        uint16_t m_NumBlockingProcesses;
+        float    m_CPUUsageFASTBuild;
+        float    m_CPUUsageTotal;
+    };
+    static_assert( sizeof( MsgServerInfo ) == sizeof( IMessage ) + 1 + 1 + 5*2 + 2*4, "MsgServerInfo message has incorrect size" );
+
+    // MsgSetMode
+    //------------------------------------------------------------------------------
+    class MsgSetMode : public IMessage
+    {
+    public:
+        MsgSetMode( uint8_t mode, uint16_t gracePeriod );
+
+        inline uint8_t  GetMode() const { return m_Mode; }
+        inline uint16_t GetGracePeriod() const { return m_GracePeriod; }
+    private:
+        uint8_t  m_Mode;
+        char     m_Padding2[ 1 ];
+        uint16_t m_GracePeriod;
+    };
+    static_assert( sizeof( MsgSetMode ) == sizeof( IMessage ) + 1 + 1 + 2, "MsgSetMode message has incorrect size" );
+
+    // MsgAddBlockingProcess
+    //------------------------------------------------------------------------------
+    class MsgAddBlockingProcess : public IMessage
+    {
+    public:
+        MsgAddBlockingProcess( uint32_t pid, uint16_t gracePeriod );
+
+        inline uint32_t GetPid() const { return m_Pid; }
+        inline uint16_t GetGracePeriod() const { return m_GracePeriod; }
+    private:
+        uint32_t m_Pid;
+        uint16_t m_GracePeriod;
+        uint8_t  m_Padding2[2];
+    };
+    static_assert( sizeof( MsgAddBlockingProcess ) == sizeof( IMessage ) + 4 + 2 + 2, "MsgAddBlockingProcess message has incorrect size" );
+
+    // MsgRemoveBlockingProcess
+    //------------------------------------------------------------------------------
+    class MsgRemoveBlockingProcess : public IMessage
+    {
+    public:
+        MsgRemoveBlockingProcess( uint32_t pid );
+
+        inline uint32_t GetPid() const { return m_Pid; }
+    private:
+        uint32_t m_Pid;
+    };
+    static_assert( sizeof( MsgRemoveBlockingProcess ) == sizeof( IMessage ) + 4, "MsgRemoveBlockingProcess message has incorrect size" );
 };
 
 //------------------------------------------------------------------------------

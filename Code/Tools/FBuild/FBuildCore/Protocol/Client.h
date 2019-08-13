@@ -22,7 +22,7 @@ namespace Protocol
     class MsgRequestJob;
     class MsgRequestManifest;
     class MsgRequestFile;
-    class MsgServerStatus;
+    class MsgServerInfo;
 }
 class ToolManifest;
 
@@ -45,6 +45,7 @@ private:
     void Process( const ConnectionInfo * connection, const Protocol::MsgJobResult *, const void * payload, size_t payloadSize );
     void Process( const ConnectionInfo * connection, const Protocol::MsgRequestManifest * msg );
     void Process( const ConnectionInfo * connection, const Protocol::MsgRequestFile * msg );
+    void Process( const ConnectionInfo * connection, const Protocol::MsgServerInfo * msg, const void * payload, size_t payloadSize );
 
     const ToolManifest * FindManifest( const ConnectionInfo * connection, uint64_t toolId ) const;
     bool WriteFileToDisk( const AString& fileName, const MultiBuffer & multiBuffer, size_t index ) const;
@@ -81,6 +82,20 @@ private:
         Array< Job * >          m_Jobs;                 // jobs we've sent to this server
 
         bool                    m_Blacklisted;
+
+        uint64_t m_InfoTimeStamp;
+        uint8_t  m_InfoMode;
+        uint16_t m_InfoNumClients;
+        uint16_t m_InfoNumCPUTotal;
+        uint16_t m_InfoNumCPUAvailable;
+        uint16_t m_InfoNumCPUBusy;
+        uint16_t m_InfoNumBlockingProcesses;
+        float    m_InfoCPUUsageFASTBuild;
+        float    m_InfoCPUUsageTotal;
+        Array<bool> m_InfoWorkerIdle;
+        Array<bool> m_InfoWorkerBusy;
+        Array<AString> m_InfoHostNames;
+        Array<AString> m_InfoJobStatus;
     };
     Mutex                   m_ServerListMutex;
     Array< ServerState >    m_ServerList;

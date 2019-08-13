@@ -35,7 +35,11 @@
             "Manifest",
             "RequestFile",
             "File",
-            "ServerStatus"
+            "RequestServerInfo",
+            "ServerInfo",
+            "SetMode",
+            "AddBlockingProcess",
+            "RemoveBlockingProcess"
         };
         static_assert( ( sizeof( msgNames ) / sizeof(const char *) ) == Protocol::NUM_MESSAGES, "msgNames item count doesn't match NUM_MESSAGES" );
 
@@ -186,6 +190,61 @@ Protocol::MsgFile::MsgFile( uint64_t toolId, uint32_t fileId )
     : Protocol::IMessage( Protocol::MSG_FILE, sizeof( MsgFile ), true )
     , m_FileId( fileId )
     , m_ToolId( toolId )
+{
+}
+
+// MsgRequestServerInfo
+//------------------------------------------------------------------------------
+Protocol::MsgRequestServerInfo::MsgRequestServerInfo( uint8_t detailsLevel )
+    : Protocol::IMessage( Protocol::MSG_REQUEST_SERVER_INFO, sizeof( MsgRequestServerInfo ), false )
+    , m_DetailsLevel( detailsLevel )
+{
+}
+
+// MsgServerInfo
+//------------------------------------------------------------------------------
+Protocol::MsgServerInfo::MsgServerInfo(
+        uint8_t mode, uint16_t numClients, uint16_t numCPUTotal,
+        uint16_t numCPUAvailable, uint16_t numCPUBusy, uint16_t numBlockingProcesses,
+        float cpuUsageFASTBuild, float cpuUsageTotal )
+    : Protocol::IMessage( Protocol::MSG_SERVER_INFO, sizeof( MsgServerInfo ), true )
+    , m_Mode( mode )
+    , m_NumClients( numClients )
+    , m_NumCPUTotal( numCPUTotal )
+    , m_NumCPUAvailable( numCPUAvailable )
+    , m_NumCPUBusy( numCPUBusy )
+    , m_NumBlockingProcesses( numBlockingProcesses )
+    , m_CPUUsageFASTBuild( cpuUsageFASTBuild )
+    , m_CPUUsageTotal( cpuUsageTotal )
+{
+    memset( m_Padding2, 0, sizeof( m_Padding2 ) );
+}
+
+// MsgSetMode
+//------------------------------------------------------------------------------
+Protocol::MsgSetMode::MsgSetMode( uint8_t mode, uint16_t gracePeriod )
+    : Protocol::IMessage( Protocol::MSG_SET_MODE, sizeof( MsgSetMode ), false )
+    , m_Mode( mode )
+    , m_GracePeriod( gracePeriod )
+{
+    memset( m_Padding2, 0, sizeof( m_Padding2 ) );
+}
+
+// MsgAddBlockingProcess
+//------------------------------------------------------------------------------
+Protocol::MsgAddBlockingProcess::MsgAddBlockingProcess( uint32_t pid, uint16_t gracePeriod )
+    : Protocol::IMessage( Protocol::MSG_ADD_BLOCKING_PROCESS, sizeof( MsgAddBlockingProcess ), false )
+    , m_Pid( pid )
+    , m_GracePeriod( gracePeriod )
+{
+    memset( m_Padding2, 0, sizeof( m_Padding2 ) );
+}
+
+// MsgRemoveBlockingProcess
+//------------------------------------------------------------------------------
+Protocol::MsgRemoveBlockingProcess::MsgRemoveBlockingProcess( uint32_t pid )
+    : Protocol::IMessage( Protocol::MSG_REMOVE_BLOCKING_PROCESS, sizeof( MsgRemoveBlockingProcess ), false )
+    , m_Pid( pid )
 {
 }
 
