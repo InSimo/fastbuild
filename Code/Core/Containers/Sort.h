@@ -11,8 +11,8 @@
 class AscendingCompare
 {
 public:
-    template < class T >
-    inline bool operator () ( const T & a, const T & b ) const
+    template < class T, class U >
+    inline bool operator () ( const T & a, const U & b ) const
     {
         return ( a < b );
     }
@@ -23,8 +23,8 @@ public:
 class AscendingCompareDeref
 {
 public:
-    template < class T >
-    inline bool operator () ( const T & a, const T & b ) const
+    template < class T, class U >
+    inline bool operator () ( const T & a, const U & b ) const
     {
         return ( ( *a ) < ( *b ) );
     }

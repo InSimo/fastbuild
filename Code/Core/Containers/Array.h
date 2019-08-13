@@ -720,3 +720,229 @@ private:
 };
 
 //------------------------------------------------------------------------------
+
+// SortedArray
+//------------------------------------------------------------------------------
+template<class T, class COMPARER = AscendingCompare>
+class SortedArray : public Array<T>
+{
+public:
+    explicit SortedArray()
+    {
+    }
+    explicit SortedArray( const Array<T>& other )
+    : Array<T>(other)
+    {
+        SortInternal();
+    }
+    explicit SortedArray( Array<T> && other )
+    : Array<T>(Move(other))
+    {
+        SortInternal();
+    }
+    explicit SortedArray( const SortedArray<T, COMPARER> & other )
+    : Array<T>(Move(other))
+    {
+    }
+    explicit SortedArray( SortedArray<T, COMPARER> && other )
+    : Array<T>(Move(other))
+    {
+    }
+    explicit SortedArray( const T * otherBegin, const T * otherEnd )
+    : Array<T>(otherBegin, otherEnd)
+    {
+        SortInternal();
+    }
+    explicit SortedArray( size_t initialCapacity, bool resizeable = false )
+    : Array<T>(initialCapacity, resizeable)
+    {
+    }
+
+    inline void operator = ( const Array<T> & other )
+    {
+        Array<T>::operator = ( other );
+        SortInternal();
+    }
+    inline void operator = ( const SortedArray<T, COMPARER> & other )
+    {
+        Array<T>::operator = ( other );
+    }
+    inline void operator = ( Array<T> && other )
+    {
+        Array<T>::operator = ( Move( other ) );
+        SortInternal();
+    }
+    inline void operator = ( SortedArray<T, COMPARER> && other )
+    {
+        Array<T>::operator = ( Move( other ) );
+    }
+
+    void Swap( Array< T > & other )
+    {
+        Array<T>::Swap( other );
+        SortInternal();
+    }
+    void Swap( SortedArray< T, COMPARER > & other )
+    {
+        Array<T>::Swap( other );
+        SortInternal();
+    }
+
+    template < class U >
+    T * Find( const U & obj ) const;
+
+    template < class U >
+    bool FindAndErase( const U & obj );
+
+    void Sort() { /* no-op */}
+
+    void SortDeref() = delete;
+    template < class COMPARER >
+    void Sort( const COMPARER & comp ) = delete;
+    template < class U >
+    T * FindDeref( const U & obj ) const = delete;
+    template < class U >
+    bool FindDerefAndErase( const U & obj ) = delete;
+
+    // add/remove items
+    void Append( const T & item );
+    void Append( T && item );
+    template < class U >
+    void Append( const Array< U > & other );
+    template < class U >
+    void Append( const U * otherBegin, const U * otherEnd );
+
+private:
+    COMPARER m_Comparer;
+    void SortInternal()
+    {
+        if (!Array<T>::IsEmpty())
+            ShellSort( this->m_Begin, this->m_Begin + this->m_Size, AscendingCompare() );
+    }
+};
+
+// Find
+//------------------------------------------------------------------------------
+template < class T, class COMPARER >
+template < class U >
+T * SortedArray< T, COMPARER >::Find( const U & obj ) const
+{
+    T * pos = this->m_Begin;
+    uint32_t size = this->m_Size;
+    while ( size > 0 )
+    {
+        uint32_t mid = size / 2;
+        if ( *( pos + mid ) == obj )
+        {
+            return pos + mid;
+        }
+        if (m_Comparer( * ( pos + mid ), obj ) )
+        {
+            pos += mid + 1;
+            size -= mid + 1;
+        }
+        else
+        {
+            size = mid;
+        }
+    }
+    return nullptr;
+}
+
+// FindAndErase
+//------------------------------------------------------------------------------
+template < class T, class COMPARER >
+template < class U >
+bool SortedArray< T, COMPARER >::FindAndErase( const U & obj )
+{
+    T * iter = Find( obj );
+    if ( iter )
+    {
+        Erase( iter );
+        return true;
+    }
+    return false;
+}
+
+// Append
+//------------------------------------------------------------------------------
+template < class T, class COMPARER >
+void SortedArray< T, COMPARER >::Append( const T & item )
+{
+    if ( this->m_Size == ( this->m_CapacityAndFlags & CAPACITY_MASK ) )
+    {
+        Array<T>::Grow();
+    }
+    T * pos = this->m_Begin + this->m_Size;
+    if ( this->m_Size == 0 || m_Comparer( *( pos - 1 ), item ) )
+    { // the new item is directly appended at the end
+        INPLACE_NEW ( pos ) T( item );
+    }
+    else
+    { // one or more items need to be shifted
+        INPLACE_NEW ( pos ) T( Move( *( pos - 1 ) ) );
+        --pos;
+        while ( pos > this->m_Begin && ! m_Comparer( *( pos - 1 ), item ) )
+        {
+            *( pos ) = Move( *( pos - 1 ) );
+            --pos;
+        }
+        *( pos ) = item;
+    }
+    this->m_Size++;
+}
+
+// Append
+//------------------------------------------------------------------------------
+template < class T, class COMPARER >
+void SortedArray< T, COMPARER >::Append( T && item )
+{
+    if ( this->m_Size == ( this->m_CapacityAndFlags & CAPACITY_MASK ) )
+    {
+        Array<T>::Grow();
+    }
+    T * pos = this->m_Begin + this->m_Size;
+    if ( this->m_Size == 0 || m_Comparer( *( pos - 1 ), item ) )
+    { // the new item is directly appended at the end
+        INPLACE_NEW ( pos ) T( Move( item ) );
+    }
+    else
+    { // one or more items need to be shifted
+        INPLACE_NEW ( pos ) T( Move( *( pos - 1 ) ) );
+        --pos;
+        while ( pos > this->m_Begin && ! m_Comparer( *( pos - 1 ), item ) )
+        {
+            *( pos ) = Move( *( pos - 1 ) );
+            --pos;
+        }
+        *( pos ) = Move( item );
+    }
+    this->m_Size++;
+}
+
+// Append
+//------------------------------------------------------------------------------
+template < class T, class COMPARER >
+template < class U >
+void SortedArray< T, COMPARER >::Append( const Array< U > & other )
+{
+    U* endPos = other.End();
+    for ( U* it = other.Begin(); it != endPos; ++it )
+    {
+        Append( *it );
+    }
+}
+
+// Append
+//------------------------------------------------------------------------------
+template < class T, class COMPARER >
+template < class U >
+void SortedArray< T, COMPARER >::Append( const U * otherBegin, const U * otherEnd )
+{
+    for ( const U* it = otherBegin; it != otherEnd; ++it )
+    {
+        Append( *it );
+    }
+}
+
+//------------------------------------------------------------------------------
