@@ -77,7 +77,7 @@ public:
     explicit NodeGraph();
     ~NodeGraph();
 
-    static NodeGraph * Initialize( const char * bffFile, const char * nodeGraphDBFile, bool forceMigration );
+    static NodeGraph * Initialize( const char * bffFile, const char * nodeGraphDBFile, bool forceMigration, bool bffFileRequired );
 
     enum class LoadResult
     {
@@ -135,6 +135,7 @@ public:
     void AddUsedFile( const AString & fileName, uint64_t timeStamp, uint64_t dataHash );
     bool IsOneUseFile( const AString & fileName ) const;
     void SetCurrentFileAsOneUse();
+    uint64_t GetLatestFileTimeStamp() const;
 
     static void UpdateBuildStatus( const Node * node,
                                    uint32_t & nodesBuiltTime,
@@ -142,7 +143,7 @@ public:
 private:
     friend class FBuild;
 
-    bool ParseFromRoot( const char * bffFile );
+    bool ParseFromRoot( const char * bffFile, bool bffFileRequired = true );
 
     void AddNode( Node * node );
 

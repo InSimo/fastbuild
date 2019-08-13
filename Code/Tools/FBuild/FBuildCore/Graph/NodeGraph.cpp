@@ -43,6 +43,7 @@
 #include "Core/FileIO/PathUtils.h"
 #include "Core/Math/CRC32.h"
 #include "Core/Math/xxHash.h"
+#include "Core/Math/Conversions.h"
 #include "Core/Mem/Mem.h"
 #include "Core/Process/Thread.h"
 #include "Core/Profile/Profile.h"
@@ -90,7 +91,7 @@ NodeGraph::~NodeGraph()
 //------------------------------------------------------------------------------
 /* static*/ NodeGraph * NodeGraph::Initialize( const char * bffFile,
                                                const char * nodeGraphDBFile,
-                                               bool forceMigration )
+                                               bool forceMigration, bool bffFileRequired )
 {
     PROFILE_FUNCTION
 
@@ -119,7 +120,7 @@ NodeGraph::~NodeGraph()
             // Create a fresh DB by parsing the BFF
             FDELETE( oldNG );
             NodeGraph * newNG = FNEW( NodeGraph );
-            if ( newNG->ParseFromRoot( bffFile ) == false )
+            if ( newNG->ParseFromRoot( bffFile, bffFileRequired ) == false )
             {
                 FDELETE( newNG );
                 return nullptr; // ParseFromRoot will have emitted an error
@@ -136,7 +137,7 @@ NodeGraph::~NodeGraph()
         {
             // Create a fresh DB by parsing the modified BFF
             NodeGraph * newNG = FNEW( NodeGraph );
-            if ( newNG->ParseFromRoot( bffFile ) == false )
+            if ( newNG->ParseFromRoot( bffFile, bffFileRequired ) == false )
             {
                 FDELETE( newNG );
                 FDELETE( oldNG );
@@ -166,25 +167,34 @@ NodeGraph::~NodeGraph()
 
 // ParseFromRoot
 //------------------------------------------------------------------------------
-bool NodeGraph::ParseFromRoot( const char * bffFile )
+bool NodeGraph::ParseFromRoot( const char * bffFile, bool bffFileRequired )
 {
     ASSERT( m_UsedFiles.IsEmpty() ); // NodeGraph cannot be recycled
 
     // open the configuration file
     FLOG_INFO( "Loading BFF '%s'", bffFile );
     FileStream bffStream;
+    uint32_t size = 0;
+    const uint64_t rootBFFTimeStamp = FileIO::GetFileLastWriteTime( AStackString<>( bffFile ) );
     if ( bffStream.Open( bffFile ) == false )
     {
         // missing bff is a fatal problem
-        FLOG_ERROR( "Failed to open BFF '%s'", bffFile );
-        return false;
+        // except if bffFileRequired is false
+        if (bffFileRequired)
+        {
+            FLOG_ERROR( "Failed to open BFF '%s'", bffFile );
+            return false;
+        }
+        // we continue with size = 0, the graph will be initialized as if the file was empty
     }
-    const uint64_t rootBFFTimeStamp = FileIO::GetFileLastWriteTime( AStackString<>( bffFile ) );
+    else
+    {
+        size = (uint32_t)bffStream.GetFileSize();
+    }
 
     // read entire config into memory
-    uint32_t size = (uint32_t)bffStream.GetFileSize();
     AutoPtr< char > data( (char *)ALLOC( size + 1 ) ); // extra byte for null character sentinel
-    if ( bffStream.Read( data.Get(), size ) != size )
+    if ( size > 0 && bffStream.Read( data.Get(), size ) != size )
     {
         FLOG_ERROR( "Error reading BFF '%s'", bffFile );
         return false;
@@ -254,7 +264,7 @@ NodeGraph::LoadResult NodeGraph::Load( IOStream & stream, const char * nodeGraph
         return LoadResult::MISSING_OR_INCOMPATIBLE;
     }
 
-    // Take not of whether we need to reparse
+    // Take note of whether we need to reparse
     bool bffNeedsReparsing = false;
 
     // check if any files used have changed
@@ -1446,6 +1456,18 @@ void NodeGraph::SetCurrentFileAsOneUse()
 {
     ASSERT( !m_UsedFiles.IsEmpty() );
     m_UsedFiles[ m_UsedFiles.GetSize() - 1 ].m_Once = true;
+}
+
+// GetLatestFileTimeStamp
+//------------------------------------------------------------------------------
+uint64_t NodeGraph::GetLatestFileTimeStamp() const
+{
+    uint64_t latest = 0;
+    for ( const UsedFile& f : m_UsedFiles )
+    {
+        latest = Math::Max( latest, f.m_TimeStamp );
+    }
+    return latest;
 }
 
 // FindNodeInternal

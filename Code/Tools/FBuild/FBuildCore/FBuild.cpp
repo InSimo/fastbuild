@@ -163,7 +163,7 @@ bool FBuild::Initialize( const char * nodeGraphDBFile )
 
     SmallBlockAllocator::SetSingleThreadedMode( true );
 
-    m_DependencyGraph = NodeGraph::Initialize( bffFile, m_DependencyGraphFile.Get(), m_Options.m_ForceDBMigration_Debug );
+    m_DependencyGraph = NodeGraph::Initialize( bffFile, m_DependencyGraphFile.Get(), m_Options.m_ForceDBMigration_Debug, m_Options.m_PerformBuild );
 
     SmallBlockAllocator::SetSingleThreadedMode( false );
 

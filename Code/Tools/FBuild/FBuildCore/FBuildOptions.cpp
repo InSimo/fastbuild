@@ -56,6 +56,8 @@ FBuildOptions::OptionsResult FBuildOptions::ProcessCommandLine( int argc, char *
 
     bool progressOptionSpecified = false;
 
+    bool buildNeeded = false;
+    bool buildNotNeeded = false;
     // Parse options
     for ( int32_t i=1; i<argc; ++i ) // start from 1 to skip exe name
     {
@@ -75,11 +77,13 @@ FBuildOptions::OptionsResult FBuildOptions::ProcessCommandLine( int argc, char *
             {
                 m_UseCacheRead = true;
                 m_UseCacheWrite = true;
+                buildNeeded = true; // this option implies performing a build
                 continue;
             }
             else if ( thisArg == "-cacheread" )
             {
                 m_UseCacheRead = true;
+                buildNeeded = true; // this option implies performing a build
                 continue;
             }
             else if ( thisArg == "-cachewrite" )
@@ -90,10 +94,12 @@ FBuildOptions::OptionsResult FBuildOptions::ProcessCommandLine( int argc, char *
             else if ( thisArg == "-cacheinfo" )
             {
                 m_CacheInfo = true;
+                buildNotNeeded = true; // this is an action outside of a normal build
                 continue;
             }
             else if ( thisArg == "-cachetrim" )
             {
+                buildNotNeeded = true; // this is an action outside of a normal build
                 const int sizeIndex = ( i + 1 );
                 PRAGMA_DISABLE_PUSH_MSVC( 4996 ) // This function or variable may be unsafe...
                 if ( ( sizeIndex >= argc ) ||
@@ -114,16 +120,19 @@ FBuildOptions::OptionsResult FBuildOptions::ProcessCommandLine( int argc, char *
             else if ( thisArg == "-cacheverbose" )
             {
                 m_CacheVerbose = true;
+                buildNeeded = true; // this option implies performing a build
                 continue;
             }
             else if ( thisArg == "-clean" )
             {
                 m_ForceCleanBuild = true;
+                buildNeeded = true; // this option implies performing a build
                 continue;
             }
             else if ( thisArg == "-compdb" )
             {
                 m_GenerateCompilationDatabase = true;
+                buildNeeded = true; // this option implies performing a build
                 continue;
             }
             else if ( thisArg == "-config" )
@@ -166,11 +175,13 @@ FBuildOptions::OptionsResult FBuildOptions::ProcessCommandLine( int argc, char *
             else if ( thisArg == "-fastcancel" )
             {
                 m_FastCancel = true;
+                buildNeeded = true; // this option implies performing a build
                 continue;
             }
             else if ( thisArg == "-fixuperrorpaths" )
             {
                 m_FixupErrorPaths = true;
+                buildNeeded = true; // this option implies performing a build
                 continue;
             }
             else if ( thisArg == "-forceremote" )
@@ -178,6 +189,7 @@ FBuildOptions::OptionsResult FBuildOptions::ProcessCommandLine( int argc, char *
                 m_AllowDistributed = true;
                 m_NoLocalConsumptionOfRemoteJobs = true; // ensure all jobs happen on the remote worker
                 m_AllowLocalRace = false;
+                buildNeeded = true; // this option implies performing a build
                 continue;
             }
             else if ( thisArg == "-help" )
@@ -193,6 +205,7 @@ FBuildOptions::OptionsResult FBuildOptions::ProcessCommandLine( int argc, char *
                     m_FixupErrorPaths = true;
                     m_WrapperMode = WRAPPER_MODE_MAIN_PROCESS;
                 #endif
+                buildNeeded = true; // this option implies performing a build
                 continue;
             }
             PRAGMA_DISABLE_PUSH_MSVC( 4996 ) // This function or variable may be unsafe...
@@ -209,6 +222,7 @@ FBuildOptions::OptionsResult FBuildOptions::ProcessCommandLine( int argc, char *
             else if ( thisArg == "-monitor" )
             {
                 m_EnableMonitor = true;
+                buildNeeded = true; // this option implies performing a build
                 continue;
             }
             else if ( thisArg == "-nooutputbuffering" )
@@ -221,28 +235,33 @@ FBuildOptions::OptionsResult FBuildOptions::ProcessCommandLine( int argc, char *
             {
                 m_ShowProgress = false;
                 progressOptionSpecified = true;
+                buildNeeded = true; // this option implies performing a build
                 continue;
             }
             else if ( thisArg == "-nostoponerror")
             {
                 m_StopOnFirstError = false;
+                buildNeeded = true; // this option implies performing a build
                 continue;
             }
             else if ( thisArg == "-nosummaryonerror" )
             {
                 m_ShowSummary = true;
                 m_NoSummaryOnError = true;
+                buildNeeded = true; // this option implies performing a build
                 continue;
             }
             else if ( thisArg == "-nounity" )
             {
                 m_NoUnity = true;
+                buildNeeded = true; // this option implies performing a build
                 continue;
             }
             else if ( thisArg == "-progress" )
             {
                 m_ShowProgress = true;
                 progressOptionSpecified = true;
+                buildNeeded = true; // this option implies performing a build
                 continue;
             }
             else if ( thisArg == "-quiet" )
@@ -254,32 +273,38 @@ FBuildOptions::OptionsResult FBuildOptions::ProcessCommandLine( int argc, char *
             else if ( thisArg == "-report" )
             {
                 m_GenerateReport = true;
+                buildNeeded = true; // this option implies performing a build
                 continue;
             }
             else if ( thisArg == "-showcmds" )
             {
                 m_ShowCommandLines = true;
+                buildNeeded = true; // this option implies performing a build
                 continue;
             }
             else if ( thisArg == "-showdeps" )
             {
                 m_DisplayDependencyDB = true;
+                buildNeeded = true; // this option implies performing a build
                 continue;
             }
             else if ( thisArg == "-showtargets" )
             {
                 m_DisplayTargetList = true;
+                buildNeeded = true; // this option implies performing a build
                 continue;
             }
             else if ( thisArg == "-showalltargets" )
             {
                 m_DisplayTargetList = true;
                 m_ShowHiddenTargets = true;
+                buildNeeded = true; // this option implies performing a build
                 continue;
             }
             else if ( thisArg == "-summary" )
             {
                 m_ShowSummary = true;
+                buildNeeded = true; // this option implies performing a build
                 continue;
             }
             else if ( thisArg == "-verbose" )
@@ -297,6 +322,7 @@ FBuildOptions::OptionsResult FBuildOptions::ProcessCommandLine( int argc, char *
             else if ( thisArg == "-wait" )
             {
                 m_WaitMode = true;
+                buildNeeded = true; // this option implies performing a build
                 continue;
             }
             else if ( thisArg == "-wrapper")
@@ -304,6 +330,7 @@ FBuildOptions::OptionsResult FBuildOptions::ProcessCommandLine( int argc, char *
                 #if defined( __WINDOWS__ )
                     m_WrapperMode = WRAPPER_MODE_MAIN_PROCESS;
                 #endif
+                buildNeeded = true; // this option implies performing a build
                 continue;
             }
             else if ( thisArg == "-wrapperintermediate") // Internal use only
@@ -330,8 +357,11 @@ FBuildOptions::OptionsResult FBuildOptions::ProcessCommandLine( int argc, char *
         {
             // assume target
             m_Targets.Append( thisArg );
+            buildNeeded = true; // this option implies performing a build
         }
     }
+    // We always perform a build, except if no targets or options implying a build is given AND an action not linked to a build is requested (cache trim, workers control, ...)
+    m_PerformBuild = buildNeeded || !buildNotNeeded;
 
     if ( progressOptionSpecified == false )
     {
@@ -340,7 +370,7 @@ FBuildOptions::OptionsResult FBuildOptions::ProcessCommandLine( int argc, char *
     }
 
     // Default to build "all"
-    if ( m_Targets.IsEmpty() )
+    if ( m_Targets.IsEmpty() && m_PerformBuild )
     {
         FLOG_INFO( "No target specified, defaulting to target 'all'" );
         m_Targets.Append( AStackString<>( "all" ) );
@@ -476,24 +506,28 @@ void FBuildOptions::DisplayHelp( const AString & programName ) const
     DisplayVersion();
     OUTPUT( "----------------------------------------------------------------------\n"
             "Usage: %s [options] [target1]..[targetn]\n", programName.Get() );
+    OUTPUT( "The default action is to perform a build, which is done if a target is\n"
+            "specified, or any Build Options is used, or no other actions are\n"
+            "requested.\n" );
     OUTPUT( "----------------------------------------------------------------------\n"
-            "Options:\n"
-            " -cache[read|write] Control use of the build cache.\n"
-            " -cacheinfo     Output cache statistics.\n"
-            " -cachetrim [size] Trim the cache to the given size in MiB.\n"
-            " -cacheverbose  Emit details about cache interactions.\n"
-            " -clean         Force a clean build.\n"
-            " -compdb        Generate JSON compilation database for specified targets.\n"
+            "Generic Options:\n"
+            " -verbose       Show detailed diagnostic information. This will slow\n"
+            "                down building.\n"
             " -config [path] Explicitly specify the config file to use.\n" );
 #ifdef DEBUG
     OUTPUT( " -debug         Break at startup, to attach debugger.\n" );
 #endif
     OUTPUT( " -dist          Allow distributed compilation.\n"
             " -distverbose   Print detailed info for distributed compilation.\n"
+    OUTPUT( "----------------------------------------------------------------------\n"
+            "Build Options:\n"
+            " -cache[read|write] Control use of the build cache.\n"
+            " -cacheverbose  Emit details about cache interactions.\n"
+            " -clean         Force a clean build.\n"
+            " -compdb        Generate JSON compilation database for specified targets.\n"
             " -fastcancel    [Experimental] Fast cancellation behavior on build failure.\n"
             " -fixuperrorpaths Reformat error paths to be Visual Studio friendly.\n"
             " -forceremote   Force distributable jobs to only be built remotely.\n"
-            " -help          Show this help.\n"
             " -ide           Enable multiple options when building from an IDE.\n"
             "                Enables: -noprogress, -fixuperrorpaths &\n"
             "                -wrapper (Windows)\n"
@@ -514,15 +548,18 @@ void FBuildOptions::DisplayHelp( const AString & programName ) const
             " -showtargets   Display list of primary targets, excluding those marked \"Hidden\".\n"
             " -showalltargets Display list of primary targets, including those marked \"Hidden\".\n"
             " -summary       Show a summary at the end of the build.\n"
-            " -verbose       Show detailed diagnostic information. This will slow\n"
-            "                down building.\n"
-            " -version       Print version and exit. No other work will be\n"
-            "                performed.\n"
             " -vs            VisualStudio mode. Same as -ide.\n"
             " -wait          Wait for a previous build to complete before starting.\n"
             "                (Slower than building both targets in one invocation).\n"
             " -wrapper       (Windows only) Spawn a sub-process to gracefully handle\n"
-            "                termination from Visual Studio.\n"
+            "                termination from Visual Studio.\n" );
+    OUTPUT( "----------------------------------------------------------------------\n"
+            "Other Actions Options:\n"
+            " -cacheinfo     Output cache statistics.\n"
+            " -cachetrim [size] Trim the cache to the given size in MiB.\n"
+            " -help          Show this help.\n"
+            " -version       Print version and exit. No other work will be\n"
+            "                performed.\n"
             "----------------------------------------------------------------------\n" );
 }
 

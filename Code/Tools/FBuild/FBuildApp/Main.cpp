@@ -109,9 +109,9 @@ int Main(int argc, char * argv[])
     // (when main process can acquire, final process has terminated)
     SystemMutex finalProcess( options.GetFinalProcessMutexName().Get() );
 
-    // only 1 instance running at a time
+    // only 1 instance running at a time (except if no build is requested)
     if ( ( wrapperMode == FBuildOptions::WRAPPER_MODE_MAIN_PROCESS ) ||
-         ( wrapperMode == FBuildOptions::WRAPPER_MODE_NONE ) )
+         ( wrapperMode == FBuildOptions::WRAPPER_MODE_NONE && options.m_PerformBuild ) )
     {
         if ( mainProcess.TryLock() == false )
         {
@@ -204,7 +204,7 @@ int Main(int argc, char * argv[])
     {
         result = fBuild.CacheTrim();
     }
-    else
+    else if ( options.m_PerformBuild )
     {
         result = fBuild.Build( options.m_Targets );
     }

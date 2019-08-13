@@ -48,6 +48,7 @@ public:
     Array< AString > m_Targets;
 
     // Build Behaviour
+    bool        m_PerformBuild                      = true;
     bool        m_ForceCleanBuild                   = false;
     bool        m_StopOnFirstError                  = true;
     bool        m_FastCancel                        = false;
