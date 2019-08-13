@@ -11,6 +11,7 @@
 //------------------------------------------------------------------------------
 class AString;
 class OSDropDown;
+class OSEdit;
 class OSWidget;
 class OSWindow;
 
@@ -56,6 +57,7 @@ public:
     virtual bool OnTrayIconRightClick();
     virtual void OnDropDownSelectionChanged( OSDropDown * dropDown );
     virtual void OnTrayIconMenuItemSelected( uint32_t index );
+    virtual void OnEditChanged( OSEdit * edit );
 
 protected:
     void * m_Handle;

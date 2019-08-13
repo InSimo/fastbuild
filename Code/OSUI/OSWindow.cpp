@@ -4,6 +4,7 @@
 // Includes
 //------------------------------------------------------------------------------
 #include "OSDropDown.h"
+#include "OSEdit.h"
 #include "OSWindow.h"
 
 #include "Core/Env/Assert.h"
@@ -87,6 +88,12 @@
                 {
                     OSDropDown * dropDown = (OSDropDown *)window->GetChildFromHandle((void *)lParam);
                     window->OnDropDownSelectionChanged( dropDown );
+                    return 0;
+                }
+                else if( HIWORD(wParam) == EN_CHANGE )
+                {
+                    OSEdit * edit = (OSEdit *)window->GetChildFromHandle((void *)lParam);
+                    window->OnEditChanged( edit );
                     return 0;
                 }
                 break;
@@ -308,6 +315,13 @@ void OSWindow::PumpMessages()
 /*virtual*/ void OSWindow::OnTrayIconMenuItemSelected( uint32_t /*index*/ )
 {
     // Derived class can ignore these events if desired
+}
+
+// OnEditChanged
+//------------------------------------------------------------------------------
+/*virtual*/ void OSWindow::OnEditChanged( OSEdit * edit )
+{
+    (void)edit; // Derived class can ignore these events if desired
 }
 
 // GetChildFromHandle
