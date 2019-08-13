@@ -356,21 +356,13 @@ void FBuild::SaveDependencyGraph( IOStream & stream, const char* nodeGraphDBFile
     m_DependencyGraph->Save( stream, nodeGraphDBFile );
 }
 
-// Build
+// InitializeClient
 //------------------------------------------------------------------------------
-bool FBuild::Build( Node * nodeToBuild )
+void FBuild::InitializeClient()
 {
-    ASSERT( nodeToBuild );
-
-    AtomicStoreRelaxed( &s_StopBuild, false ); // allow multiple runs in same process
-    AtomicStoreRelaxed( &s_AbortBuild, false ); // allow multiple runs in same process
-
-    // create worker threads
-    m_JobQueue = FNEW( JobQueue( m_Options.m_NumWorkerThreads ) );
-
     // create the connection management system if needed
     // (must be after JobQueue is created)
-    if ( m_Options.m_AllowDistributed )
+    if ( m_Options.m_AllowDistributed &&  m_Client == nullptr )
     {
         const SettingsNode * settings = m_DependencyGraph->GetSettings();
 
@@ -397,6 +389,21 @@ bool FBuild::Build( Node * nodeToBuild )
             m_Client = FNEW( Client( workers, m_Options.m_DistributionPort, settings->GetWorkerConnectionLimit(), m_Options.m_DistVerbose ) );
         }
     }
+}
+
+// Build
+//------------------------------------------------------------------------------
+bool FBuild::Build( Node * nodeToBuild )
+{
+    ASSERT( nodeToBuild );
+
+    AtomicStoreRelaxed( &s_StopBuild, false ); // allow multiple runs in same process
+    AtomicStoreRelaxed( &s_AbortBuild, false ); // allow multiple runs in same process
+
+    // create worker threads
+    m_JobQueue = FNEW( JobQueue( m_Options.m_NumWorkerThreads ) );
+
+    InitializeClient();
 
     m_Timer.Start();
     m_LastProgressOutputTime = 0.0f;

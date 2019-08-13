@@ -110,6 +110,8 @@ protected:
 
     void UpdateBuildStatus( const Node * node );
 
+    void InitializeClient();
+
     static bool s_StopBuild;
     static volatile bool s_AbortBuild;  // -fastcancel - TODO:C merge with StopBuild
 

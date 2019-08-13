@@ -73,6 +73,16 @@ public:
     bool        m_AllowLocalRace                    = true;
     uint16_t    m_DistributionPort                  = Protocol::PROTOCOL_PORT;
 
+    // Workers Control
+    Array<AString> m_Workers;
+    bool        m_PerformWorkersControl             = true;
+    int32_t     m_WorkersInfoLevel                  = 0;
+    int32_t     m_WorkersSetMode                    = -1;
+    uint32_t    m_WorkersAddBlockingPid             = 0;
+    uint32_t    m_WorkersRemoveBlockingPid          = 0;
+    int32_t     m_WorkersGracePeriod                = 0;
+    int32_t     m_WorkersWaitTimeout                = 0;
+
     // General Output
     bool        m_ShowInfo                          = false;
     bool        m_ShowCommandLines                  = false;
