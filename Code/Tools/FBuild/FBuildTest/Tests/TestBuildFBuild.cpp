@@ -60,7 +60,7 @@ FBuildStats TestBuildFBuild::BuildInternal( FBuildTestOptions options, bool useD
     Array< AString > targets;
     #if defined( __WINDOWS__ )
         targets.Append( AStackString<>( "All-x64-Debug" ) );
-        targets.Append( AStackString<>( "All-x64Clang-Release" ) );
+        //targets.Append( AStackString<>( "All-x64Clang-Release" ) );
     #elif defined( __LINUX__ )
         targets.Append( AStackString<>( "All-x64Linux-Debug" ) );
         targets.Append( AStackString<>( "All-x64ClangLinux-Release" ) );
@@ -106,8 +106,8 @@ void TestBuildFBuild::BuildClean() const
     TEST_ASSERT( objStats.m_NumBuilt == objStats.m_NumProcessed ); // everything rebuilt
 
     #if defined( __WINDOWS__ )
-        // One windows, 2 .res files are built which can't be stored, and everything else can
-        TEST_ASSERT( objStats.m_NumCacheStores == ( objStats.m_NumBuilt - 2 ) );
+        // One windows, 1 .res file is built which can't be stored, and everything else can
+        TEST_ASSERT( objStats.m_NumCacheStores == ( objStats.m_NumBuilt - 1 ) );
     #else
         TEST_ASSERT( objStats.m_NumCacheStores == objStats.m_NumBuilt ); // everything stored to the cache
     #endif
@@ -153,9 +153,9 @@ void TestBuildFBuild::BuildCleanWithCache() const
     const FBuildStats::Stats & objStats = stats.GetStatsFor( Node::OBJECT_NODE );
     TEST_ASSERT( objStats.m_NumProcessed > 10 ); // not exact so we don't have to update it
     #if defined( __WINDOWS__ )
-        // One windows, 2 .res files are built, and everything else comes from the cache
-        TEST_ASSERT( objStats.m_NumBuilt == 2 );
-        TEST_ASSERT( objStats.m_NumCacheHits == ( objStats.m_NumProcessed - 2 ) );
+        // One windows, 1 .res file is built, and everything else comes from the cache
+        TEST_ASSERT( objStats.m_NumBuilt == 1 );
+        TEST_ASSERT( objStats.m_NumCacheHits == ( objStats.m_NumProcessed - 1 ) );
     #else
         TEST_ASSERT( objStats.m_NumBuilt == 0 ); // nothing built
         TEST_ASSERT( objStats.m_NumCacheHits == objStats.m_NumProcessed ); // everything read from cache

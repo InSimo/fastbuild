@@ -62,10 +62,10 @@ REGISTER_TESTS_BEGIN( TestPrecompiledHeaders )
     #if defined( __WINDOWS__ )
         REGISTER_TEST( PrecompiledHeaderCacheAnalyze_MSVC )
         REGISTER_TEST( PreventUselessCacheTraffic_MSVC )
-        REGISTER_TEST( TestPCHClangWindows )
-        REGISTER_TEST( TestPCHClangWindows_NoRebuild )
-        REGISTER_TEST( TestPCHClangWindowsWithCache )
-        REGISTER_TEST( TestPCHClangWindowsWithCache_NoRebuild )
+        //REGISTER_TEST( TestPCHClangWindows )
+        //REGISTER_TEST( TestPCHClangWindows_NoRebuild )
+        //REGISTER_TEST( TestPCHClangWindowsWithCache )
+        //REGISTER_TEST( TestPCHClangWindowsWithCache_NoRebuild )
     #endif
 REGISTER_TESTS_END
 

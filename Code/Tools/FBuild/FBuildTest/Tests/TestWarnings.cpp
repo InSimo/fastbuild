@@ -30,7 +30,7 @@ REGISTER_TESTS_BEGIN( TestWarnings )
         REGISTER_TEST( PragmaMessageWarningsAreShown )
     #endif
     #if defined( __WINDOWS__ ) || defined( __OSX__ )
-        REGISTER_TEST( ClangMacroExpansion )
+        //REGISTER_TEST( ClangMacroExpansion )
     #endif
 REGISTER_TESTS_END
 

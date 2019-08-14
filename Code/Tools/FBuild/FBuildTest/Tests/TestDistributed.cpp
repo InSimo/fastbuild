@@ -65,9 +65,9 @@ REGISTER_TESTS_BEGIN( TestDistributed )
     REGISTER_TEST( ShutdownMemoryLeak )
     #if defined( __WINDOWS__ )
         REGISTER_TEST( ErrorsAreCorrectlyReported_MSVC ) // TODO:B Enable for OSX and Linux
-        REGISTER_TEST( ErrorsAreCorrectlyReported_Clang ) // TODO:B Enable for OSX and Linux
+        //REGISTER_TEST( ErrorsAreCorrectlyReported_Clang ) // TODO:B Enable for OSX and Linux
         REGISTER_TEST( WarningsAreCorrectlyReported_MSVC ) // TODO:B Enable for OSX and Linux
-        REGISTER_TEST( WarningsAreCorrectlyReported_Clang ) // TODO:B Enable for OSX and Linux
+        //REGISTER_TEST( WarningsAreCorrectlyReported_Clang ) // TODO:B Enable for OSX and Linux
         REGISTER_TEST( TestForceInclude )
         REGISTER_TEST( TestZiDebugFormat )
         REGISTER_TEST( TestZiDebugFormat_Local )
