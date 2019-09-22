@@ -273,6 +273,11 @@ void Worker::UpdateAvailability()
     if (modeToSet != (uint32_t)ws.GetMode())
     {
         ws.SetMode((WorkerSettings::Mode)modeToSet);
+        
+        if ( !InConsoleMode() )
+        {
+            m_MainWindow->SetMode( ws.GetMode() );
+        }
     }
 
     m_IdleDetection.Update(blockingProcessNames, blockingPidToAdd, blockingPidToRemove);
@@ -419,7 +424,7 @@ void Worker::UpdateUI()
                (uint8_t)m_WorkerSettings->GetMode(),                // mode
                (uint16_t)numConnections,                            // numClients
                (uint16_t)numWorkers,                                // numCPUTotal
-               (uint16_t)countIdle,                                 // numCPUAvailable
+               (uint16_t)countIdle,                                 // numCPUIdle
                (uint16_t)countBusy,                                 // numCPUBusy
                (uint16_t)m_IdleDetection.GetNumBlockingProcesses(), // numBlockingProcesses
                m_IdleDetection.GetCPUUsageFASTBuild(),              // m_CPUUsageFASTBuild

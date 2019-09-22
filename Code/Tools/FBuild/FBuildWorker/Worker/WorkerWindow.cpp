@@ -240,6 +240,13 @@ void WorkerWindow::SetWorkerState( size_t index, const AString & hostName, const
     m_ThreadList->SetItemText( (uint32_t)index, 2, status.Get() );
 }
 
+// SetMode
+//------------------------------------------------------------------------------
+void WorkerWindow::SetMode( int mode )
+{
+    m_ModeDropDown->SetSelectedItem( mode );
+}
+
 // Work
 //------------------------------------------------------------------------------
 void WorkerWindow::Work()

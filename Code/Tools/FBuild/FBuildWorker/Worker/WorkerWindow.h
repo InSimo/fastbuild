@@ -38,6 +38,7 @@ public:
 
     void SetStatus( const char * statusText );
     void SetWorkerState( size_t index, const AString & hostName, const AString & status );
+    void SetMode( int mode );
 
     const OSMenu * GetMenu() const { return m_Menu; }
 
