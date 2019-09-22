@@ -1,0 +1,9 @@
+//
+// Test behaviour of Alias() with an empty targets list
+//
+Alias( "alias" )
+{
+    .Targets =
+    {
+    }
+}
