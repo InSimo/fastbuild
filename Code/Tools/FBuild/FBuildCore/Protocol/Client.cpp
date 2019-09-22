@@ -15,6 +15,7 @@
 #include <Tools/FBuild/FBuildCore/Helpers/MultiBuffer.h>
 #include "Tools/FBuild/FBuildCore/WorkerPool/Job.h"
 #include "Tools/FBuild/FBuildCore/WorkerPool/JobQueue.h"
+#include "Tools/FBuild/FBuildWorker/Worker/WorkerSettings.h"
 
 #include "Core/Env/ErrorFormat.h"
 #include "Core/FileIO/ConstMemoryStream.h"
@@ -22,8 +23,10 @@
 #include "Core/FileIO/FileStream.h"
 #include "Core/FileIO/MemoryStream.h"
 #include "Core/Math/Random.h"
+#include "Core/Math/Conversions.h"
 #include "Core/Process/Atomic.h"
 #include "Core/Profile/Profile.h"
+#include "Core/Tracing/Tracing.h"
 
 // Defines
 //------------------------------------------------------------------------------
@@ -34,18 +37,49 @@
 
 // CONSTRUCTOR
 //------------------------------------------------------------------------------
-Client::Client( const Array< AString > & workerList,
+Client::Client( const Array< AString > & buildWorkerList,
+                const Array< AString > & controlWorkerList,
                 uint16_t port,
                 uint32_t workerConnectionLimit,
                 bool detailedLogging )
-    : m_WorkerList( workerList )
+    : m_WorkerList( buildWorkerList )
     , m_ShouldExit( false )
     , m_DetailedLogging( detailedLogging )
+    , m_ControlPendingSendCounter ( 0 )
+    , m_ControlPendingReceiveCounter ( 0 )
+    , m_ControlMessageExpectResponse ( false )
     , m_WorkerConnectionLimit( workerConnectionLimit )
     , m_Port( port )
 {
+    // Append control workers
+    size_t firstControlOnlyWorker = m_WorkerList.GetSize();
+    for ( const AString& worker : controlWorkerList )
+    {
+        if ( m_WorkerList.Find( worker ) == nullptr )
+        {
+            m_WorkerList.Append( worker );
+        }
+    }
+
     // allocate space for server states
-    m_ServerList.SetSize( workerList.GetSize() );
+    m_ServerList.SetSize( m_WorkerList.GetSize() );
+
+    // set build/control flags for workers
+    for ( size_t i = 0; i < m_ServerList.GetSize(); ++i )
+    {
+        if (i < firstControlOnlyWorker)
+        {
+            // this was a build worker (and could also be a control worker)
+            m_ServerList[i].m_BuildJobsEnabled = true;
+            m_ServerList[i].m_ControlEnabled = ( controlWorkerList.Find( m_WorkerList[i] ) != nullptr);
+        }
+        else
+        {
+            // this was a control-only worker
+            m_ServerList[i].m_BuildJobsEnabled = false;
+            m_ServerList[i].m_ControlEnabled = true;
+        }
+    }
 
     m_Thread = Thread::CreateThread( ThreadFuncStatic,
                                      "Client",
@@ -133,6 +167,12 @@ void Client::ThreadFunc()
             break;
         }
 
+        CommunicateCommands();
+        if ( AtomicLoadRelaxed( &m_ShouldExit ) )
+        {
+            break;
+        }
+
         Thread::Sleep( 1 );
         if ( AtomicLoadRelaxed( &m_ShouldExit ) )
         {
@@ -176,7 +216,7 @@ void Client::LookForWorkers()
     // randomize the start index to better distribute workers when there
     // are many workers/clients - otherwise all clients will attempt to connect
     // to the same subset of workers
-    Random r;
+    static Random r;
     size_t startIndex = r.GetRandIndex( (uint32_t)numWorkers );
 
     // find someone to connect to
@@ -191,7 +231,7 @@ void Client::LookForWorkers()
         }
 
         // ignore blacklisted workers
-        if ( ss.m_Blacklisted )
+        if ( !ss.m_BuildJobsEnabled && !ss.m_ControlEnabled )
         {
             continue;
         }
@@ -216,7 +256,7 @@ void Client::LookForWorkers()
         else
         {
             DIST_INFO( " - connection: %s (OK)\n", m_WorkerList[ i ].Get() );
-            const uint32_t numJobsAvailable = (uint32_t)JobQueue::Get().GetNumDistributableJobsAvailable();
+            const uint32_t numJobsAvailable = ss.m_BuildJobsEnabled ? (uint32_t)JobQueue::Get().GetNumDistributableJobsAvailable() : (uint32_t)0;
 
             ss.m_RemoteName = m_WorkerList[ i ];
             AtomicStoreRelaxed( &ss.m_Connection, ci ); // success!
@@ -261,7 +301,7 @@ void Client::CommunicateJobAvailability()
     const ServerState * const end = m_ServerList.End();
     while ( it != end )
     {
-        if ( AtomicLoadRelaxed( &it->m_Connection ) )
+        if ( it->m_BuildJobsEnabled && AtomicLoadRelaxed( &it->m_Connection ) )
         {
             MutexHolder ssMH( it->m_Mutex );
             if ( const ConnectionInfo * connection = AtomicLoadRelaxed( &it->m_Connection ) )
@@ -273,6 +313,56 @@ void Client::CommunicateJobAvailability()
                     it->m_NumJobsAvailable = numJobsAvailable;
                 }
             }
+        }
+        ++it;
+    }
+}
+
+// CommunicateCommands
+//------------------------------------------------------------------------------
+void Client::CommunicateCommands()
+{
+    PROFILE_FUNCTION
+
+    // no command to send
+    if (AtomicLoadRelaxed( &m_ControlPendingSendCounter ) == 0)
+    {
+        return;
+    }
+
+    MutexHolder mh( m_ServerListMutex );
+    // Find a server with a pending command
+    ServerState * it = m_ServerList.Begin();
+    const ServerState * const end = m_ServerList.End();
+    while ( it != end )
+    {
+        if ( it->m_ControlPendingSend && AtomicLoadRelaxed( &it->m_Connection ) )
+        {
+            MutexHolder ssMH( it->m_Mutex );
+            if ( const ConnectionInfo * connection = AtomicLoadRelaxed( &it->m_Connection ) )
+            {
+                PROFILE_SECTION( "SendCommand" )
+                const Protocol::IMessage* msg = m_ControlMessage.Get();
+                if (msg->HasPayload())
+                {
+                    SendMessageInternal( connection, *msg, *m_ControlMessagePayload.Get() );
+                }
+                else
+                {
+                    SendMessageInternal( connection, *msg );
+                }
+            }
+            it->m_ControlPendingSend = false;
+            if ( m_ControlMessageExpectResponse )
+            {
+                it->m_ControlPendingResponse = true;
+                AtomicIncU32( &m_ControlPendingReceiveCounter );
+            }
+            else
+            {
+                it->m_ControlSuccess = true;
+            }
+            AtomicDecU32(&m_ControlPendingSendCounter);
         }
         ++it;
     }
@@ -403,8 +493,8 @@ void Client::Process( const ConnectionInfo * connection, const Protocol::MsgRequ
     ServerState * ss = (ServerState *)connection->GetUserData();
     ASSERT( ss );
 
-    // no jobs for blacklisted workers
-    if ( ss->m_Blacklisted )
+    // no jobs for blacklisted or control-only workers
+    if ( !ss->m_BuildJobsEnabled )
     {
         MutexHolder mh( ss->m_Mutex );
         Protocol::MsgNoJobAvailable msg;
@@ -600,7 +690,7 @@ void Client::Process( const ConnectionInfo * connection, const Protocol::MsgJobR
         if ( systemError )
         {
             // blacklist misbehaving worker
-            ss->m_Blacklisted = true;
+            ss->m_BuildJobsEnabled = false;
 
             // take note of failure of job
             job->OnSystemError();
@@ -737,24 +827,41 @@ void Client::Process( const ConnectionInfo * connection, const Protocol::MsgServ
     ss->m_InfoMode = msg->GetMode();
     ss->m_InfoNumClients = msg->GetNumClients();
     ss->m_InfoNumCPUTotal = msg->GetNumCPUTotal();
-    ss->m_InfoNumCPUAvailable = msg->GetNumCPUAvailable();
+    ss->m_InfoNumCPUIdle = msg->GetNumCPUIdle();
     ss->m_InfoNumCPUBusy = msg->GetNumCPUBusy();
     ss->m_InfoNumBlockingProcesses = msg->GetNumBlockingProcesses();
     ss->m_InfoCPUUsageFASTBuild = msg->GetCPUUsageFASTBuild();
     ss->m_InfoCPUUsageTotal = msg->GetCPUUsageTotal();
 
-    ConstMemoryStream ms( payload, payloadSize );
-    size_t numCPUs = ss->m_InfoNumCPUTotal;
-    ss->m_InfoWorkerIdle.SetSize( numCPUs );
-    ss->m_InfoWorkerBusy.SetSize( numCPUs );
-    ss->m_InfoHostNames.SetSize( numCPUs );
-    ss->m_InfoJobStatus.SetSize( numCPUs );
-    for ( size_t i=0; i<numCPUs; ++i )
+    if (payloadSize > 0)
     {
-        ms.Read( ss->m_InfoWorkerIdle[i] );
-        ms.Read( ss->m_InfoWorkerBusy[i] );
-        ms.Read( ss->m_InfoHostNames[i] );
-        ms.Read( ss->m_InfoJobStatus[i] );
+        ConstMemoryStream ms( payload, payloadSize );
+        size_t numCPUs = ss->m_InfoNumCPUTotal;
+        ss->m_InfoWorkerIdle.SetSize( numCPUs );
+        ss->m_InfoWorkerBusy.SetSize( numCPUs );
+        ss->m_InfoHostNames.SetSize( numCPUs );
+        ss->m_InfoJobStatus.SetSize( numCPUs );
+        for ( size_t i=0; i<numCPUs; ++i )
+        {
+            ms.Read( ss->m_InfoWorkerIdle[i] );
+            ms.Read( ss->m_InfoWorkerBusy[i] );
+            ms.Read( ss->m_InfoHostNames[i] );
+            ms.Read( ss->m_InfoJobStatus[i] );
+        }
+    }
+    else
+    {
+        ss->m_InfoWorkerIdle.Clear();
+        ss->m_InfoWorkerBusy.Clear();
+        ss->m_InfoHostNames.Clear();
+        ss->m_InfoJobStatus.Clear();
+    }
+
+    if (ss->m_ControlPendingResponse)
+    {
+        ss->m_ControlPendingResponse = false;
+        ss->m_ControlSuccess = true;
+        AtomicDecU32( &m_ControlPendingReceiveCounter );
     }
 }
 
@@ -802,10 +909,313 @@ Client::ServerState::ServerState()
     , m_CurrentMessage( nullptr )
     , m_NumJobsAvailable( 0 )
     , m_Jobs( 16, true )
-    , m_Blacklisted( false )
+    , m_BuildJobsEnabled( false )
+    , m_ControlEnabled( false )
+    , m_ControlPendingSend( false )
+    , m_ControlPendingResponse( false )
+    , m_ControlSuccess( false )
+    , m_ControlFailure( false )
     , m_InfoTimeStamp( 0 )
 {
     m_DelayTimer.Start( 999.0f );
+}
+
+// WorkersSetMode
+//------------------------------------------------------------------------------
+void Client::WorkersSetCommandPending( const Array< AString > & workers)
+{
+    MutexHolder mh( m_ServerListMutex );
+    // reset all success / failure flags
+    for (ServerState * it = m_ServerList.Begin(), *end = m_ServerList.End(); it != end; ++it)
+    {
+        if (it->m_ControlEnabled)
+        {
+            MutexHolder ssMH( it->m_Mutex );
+            it->m_ControlFailure = false;
+            it->m_ControlSuccess = false;
+            if (it->m_ControlPendingSend)
+            {
+                FLOG_ERROR( "Worker %s is still processing the previous command.", it->m_RemoteName.Get() );
+                it->m_ControlPendingSend = false;
+            }
+            if (it->m_ControlPendingResponse)
+            {
+                FLOG_ERROR( "Worker %s is still waiting for the previous command response.", it->m_RemoteName.Get() );
+                it->m_ControlPendingResponse = false;
+            }
+        }
+    }
+    // set the pending flags
+    uint32_t count = 0;
+    for ( const AString& worker : workers )
+    {
+        AString* workerListIt = m_WorkerList.Find( worker );
+        if (workerListIt == nullptr)
+        {
+            FLOG_ERROR( "Worker %s is not in initial workers list.", worker.Get() );
+            continue;
+        }
+        ServerState* ss = &(m_ServerList[workerListIt - m_WorkerList.Begin()]);
+        MutexHolder mhss( ss->m_Mutex );
+        if (!ss->m_ControlEnabled)
+        {
+            FLOG_ERROR( "Worker %s is not in initial control workers list.", worker.Get() );
+            continue;
+        }
+        ss->m_ControlPendingSend = true;
+        ++count;
+    }
+    // set the pending counter (starting the process on the main client thread)
+    AtomicStoreRelease(&m_ControlPendingSendCounter, count);
+}
+
+// WorkersSetMode
+//------------------------------------------------------------------------------
+void Client::WorkersSetMode( const Array< AString > & workers, int32_t mode, int gracePeriod )
+{
+    WorkersGetLastCommandResult(); // wait for previous command to finish
+    // we can safely change the message and flags, as no other thread are looking at them now
+    m_ControlMessage = FNEW( Protocol::MsgSetMode( (uint8_t)mode, (uint16_t)gracePeriod ) );
+    m_ControlMessageExpectResponse = false;
+    // now ask selected workers to send the command
+    WorkersSetCommandPending( workers );
+}
+
+// WorkersAddBlocking
+//------------------------------------------------------------------------------
+void Client::WorkersAddBlocking( const Array< AString > & workers, uint32_t pid, int gracePeriod )
+{
+    WorkersGetLastCommandResult();
+    m_ControlMessage = FNEW( Protocol::MsgAddBlockingProcess( pid, (uint16_t)gracePeriod ) );
+    m_ControlMessageExpectResponse = false;
+    WorkersSetCommandPending( workers );
+}
+
+// WorkersRemoveBlocking
+//------------------------------------------------------------------------------
+void Client::WorkersRemoveBlocking( const Array< AString > & workers, uint32_t pid )
+{
+    WorkersGetLastCommandResult();
+    m_ControlMessage = FNEW( Protocol::MsgRemoveBlockingProcess( pid ) );
+    m_ControlMessageExpectResponse = false;
+    WorkersSetCommandPending(workers);
+}
+
+// WorkersGetLastCommandResult
+//------------------------------------------------------------------------------
+bool Client::WorkersGetLastCommandResult( uint32_t timeoutMS )
+{
+    PROFILE_SECTION( "WorkersGetLastCommandResult" )
+
+    uint32_t totalMs = 0;
+    uint32_t waitMs = 1;
+    while ((AtomicLoadRelaxed( &m_ControlPendingSendCounter ) || AtomicLoadRelaxed( &m_ControlPendingReceiveCounter )) && totalMs < timeoutMS)
+    {
+        Thread::Sleep( waitMs );
+        totalMs += waitMs;
+        waitMs = Math::Min( 100u, (waitMs*12+9)/10 ); // increase wait by 20% up to 100ms
+    }
+
+    int countTimeout = 0;
+    int countSuccess = 0;
+    int countFailures = 0;
+    {
+        MutexHolder mh( m_ServerListMutex );
+        for (ServerState * it = m_ServerList.Begin(), *end = m_ServerList.End(); it != end; ++it)
+        {
+            if (it->m_ControlEnabled)
+            {
+                MutexHolder ssMH( it->m_Mutex );
+                if (it->m_ControlPendingSend) // timeout while sending
+                {
+                    ++countTimeout;
+                    it->m_ControlPendingSend = false;
+                    it->m_ControlFailure = true;
+                    AtomicDecU32( &m_ControlPendingSendCounter );
+                }
+                else if (it->m_ControlPendingResponse) // timeout while waiting for response
+                {
+                    ++countTimeout;
+                    it->m_ControlPendingResponse = false;
+                    it->m_ControlFailure = true;
+                    AtomicDecU32( &m_ControlPendingReceiveCounter );
+                }
+                else if (it->m_ControlFailure)
+                {
+                    ++countFailures;
+                }
+                else if (it->m_ControlSuccess)
+                {
+                    ++countSuccess;
+                }
+            }
+        }
+    }
+    DIST_INFO( "WorkersGetLastCommandResult: %d Success, %d Failures, %d timeouts\n", countSuccess, countFailures, countTimeout );
+
+    return countFailures == 0 && countTimeout == 0;
+}
+
+// WorkersGatherInfo
+//------------------------------------------------------------------------------
+void Client::WorkersGatherInfo( int displayInfoLevel, Array< int >* numWorkerPerMode, int* numCPUTotal, int* numCPUIdle, int* numCPUBusy)
+{
+    PROFILE_SECTION( "WorkersGatherInfo" )
+    MutexHolder mh( m_ServerListMutex );
+    if (displayInfoLevel >= 1)
+    {
+        OUTPUT(     "|============|============|================================|====================|\n" );
+        OUTPUT(     "|Worker      |Mode        |Threads +Busy -Idle *Disabled   |%% CPU +Worker *Local|\n" );
+        if (displayInfoLevel >= 2)
+            OUTPUT( "|         CPU|Client      |Status                                               |\n" );
+        OUTPUT(     "|============|============|================================|====================|\n" );
+    }
+    else if (displayInfoLevel <= -1)
+    { // json
+        OUTPUT(     "[\n" );
+    }
+    int count = 0;
+    for (ServerState * it = m_ServerList.Begin(), *end = m_ServerList.End(); it != end; ++it)
+    {
+        if (it->m_ControlEnabled)
+        {
+            MutexHolder ssMH( it->m_Mutex );
+            if (it->m_ControlSuccess)
+            {
+                if (numWorkerPerMode)
+                {
+                    if (it->m_InfoMode >= numWorkerPerMode->GetSize()) numWorkerPerMode->SetSize(it->m_InfoMode+1);
+                    (*numWorkerPerMode)[it->m_InfoMode] += 1;
+                }
+                if (numCPUTotal) *numCPUTotal += it->m_InfoNumCPUTotal;
+                if (numCPUIdle) *numCPUIdle += it->m_InfoNumCPUIdle;
+                if (numCPUBusy) *numCPUBusy += it->m_InfoNumCPUBusy;
+                if (displayInfoLevel != 0)
+                {
+                    const char* modeStr;
+                    switch ((WorkerSettings::Mode)it->m_InfoMode)
+                    {
+                        case WorkerSettings::DISABLED: modeStr = "disabled"; break;
+                        case WorkerSettings::WHEN_IDLE: modeStr = "idle"; break;
+                        case WorkerSettings::DEDICATED: modeStr = "dedicated"; break;
+                        case WorkerSettings::PROPORTIONAL: modeStr = "proportional"; break;
+                        default: modeStr = "unknown"; break;
+                    }
+                    if (displayInfoLevel >= 1)
+                    {
+                        AStackString<32> threadsStr;
+                        AStackString<20> percentsStr;
+                        int displayThreads = Math::Min(32,(int)it->m_InfoNumCPUTotal);
+                        threadsStr.SetLength(displayThreads);
+                        if (displayInfoLevel >= 2 && it->m_InfoWorkerBusy.GetSize() >= displayThreads)
+                        { // we have detailed per-thread info
+                            for (int i = 0; i < displayThreads; ++i)
+                            {
+                                threadsStr[i] = it->m_InfoWorkerBusy[i] ? '+' :
+                                                it->m_InfoWorkerIdle[i] ? '-' : '*';
+                            }
+                        }
+                        else
+                        { // use the counts
+                            for (int i = 0; i < displayThreads; ++i)
+                            {
+                                threadsStr[i] = (i < it->m_InfoNumCPUBusy) ? '+' :
+                                                (i < it->m_InfoNumCPUBusy + it->m_InfoNumCPUIdle) ? '-' : '*';
+                            }
+                        }
+                        const int displayPercents = 20;
+                        percentsStr.SetLength(displayPercents);
+                        for (int i = 0; i < displayPercents; ++i)
+                        {
+                            float percentsVal = (i+0.5f) * 100.0f / displayPercents;
+                            percentsStr[i] = (percentsVal < it->m_InfoCPUUsageFASTBuild) ? '+' :
+                                             (percentsVal < 100.0-(it->m_InfoCPUUsageTotal-it->m_InfoCPUUsageFASTBuild)) ? '-' : '*';
+                        }
+                        if (displayInfoLevel >= 2 && count > 0)
+                            OUTPUT( "|------------|------------|--------------------------------|--------------------|\n" );
+                        OUTPUT(     "|%-12.12s|%-12.12s|%-32.32s|%-20.20s|\n", it->m_RemoteName.Get(), modeStr, threadsStr.Get(), percentsStr.Get() );
+                        if (displayInfoLevel >= 2 && it->m_InfoJobStatus.GetSize() > 0)
+                        { // we have detailed per-thread info
+                            for (int i = 0; i < it->m_InfoJobStatus.GetSize(); ++i)
+                            {
+                                OUTPUT(     "|         %3.3d|%-12.12s|%-53.53s|\n", i, it->m_InfoHostNames[i].Get(), it->m_InfoJobStatus[i].Get() );
+                            }
+                        }
+                    }
+                    else if (displayInfoLevel <= -1)
+                    {
+                        AStackString<> hostStr;
+                        hostStr = it->m_RemoteName;
+                        hostStr.Replace("\\", "\\\\");
+                        hostStr.Replace("\"", "\\\"");
+                        if (count > 0) OUTPUT( ",\n" );
+                        OUTPUT( "  { \"worker\":\"%s\", \"mode\":\"%s\"", hostStr.Get(), modeStr);
+                        OUTPUT( ", \"cpu_total\":%d, \"cpu_busy\":%d, \"cpu_idle\":%d", it->m_InfoNumCPUTotal, it->m_InfoNumCPUBusy, it->m_InfoNumCPUIdle);
+                        OUTPUT( ", \"cpu_usage_total\":%f, \"cpu_usage_fastbuild\":%f", it->m_InfoCPUUsageTotal, it->m_InfoCPUUsageFASTBuild);
+                        if (displayInfoLevel <= -2)
+                        { // we have detailed per-thread info
+                            OUTPUT( ",\n    \"jobs\":[" );
+                            for (int i = 0; i < it->m_InfoJobStatus.GetSize(); ++i)
+                            {
+                                hostStr = it->m_InfoHostNames[i];
+                                hostStr.Replace("\\", "\\\\");
+                                hostStr.Replace("\"", "\\\"");
+                                AStackString<> statusStr;
+                                statusStr = it->m_InfoJobStatus[i].Get();
+                                statusStr.Replace("\\", "\\\\");
+                                statusStr.Replace("\"", "\\\"");
+                                if (i > 0) OUTPUT(",\n            ");
+                                OUTPUT( "{\"client\":\"%s\", \"status\":\"%s\"}", hostStr.Get(), statusStr.Get() );
+                            }
+                            OUTPUT( "]" );
+                        }
+                        OUTPUT( "}\n" );
+                    }
+                }
+                ++count;
+            }
+        }
+    }
+    if (displayInfoLevel >= 1)
+    {
+        OUTPUT(     "|============|============|================================|====================|\n" );
+    }
+}
+
+// WorkersDisplayInfo
+//------------------------------------------------------------------------------
+bool Client::WorkersDisplayInfo( const Array< AString > & workers, int32_t infoLevel )
+{
+    bool res = WorkersGetLastCommandResult();
+    m_ControlMessage = FNEW( Protocol::MsgRequestServerInfo( (uint8_t)Math::Abs( infoLevel ) ) );
+    m_ControlMessageExpectResponse = true;
+    WorkersSetCommandPending( workers );
+    res = WorkersGetLastCommandResult();
+    WorkersGatherInfo( infoLevel );
+    return res;
+}
+
+// WorkersWaitIdle
+//------------------------------------------------------------------------------
+bool Client::WorkersWaitIdle( const Array< AString > & workers, int32_t timeout, int infoLevel )
+{
+    Timer timeoutTimer;
+    bool res = WorkersGetLastCommandResult( timeout == 0 ? 30000 : Math::Min( 30000, timeout*1000 ) );
+    m_ControlMessage = FNEW( Protocol::MsgRequestServerInfo( (uint8_t)infoLevel ) );
+    m_ControlMessageExpectResponse = true;
+    Array< int > numWorkerPerMode;
+    int numCPUTotal = 0;
+    int numCPUIdle = 0;
+    int numCPUBusy = 1;
+    while (res && numCPUBusy > 0 && (timeout == 0 || timeoutTimer.GetElapsed() < timeout))
+    {
+        WorkersSetCommandPending( workers );
+        res = WorkersGetLastCommandResult( timeout == 0 ? 30000 : Math::Clamp( timeout*1000 - (int)timeoutTimer.GetElapsedMS(), 0, 30000 ) );
+        WorkersGatherInfo( infoLevel, &numWorkerPerMode, &numCPUTotal, &numCPUIdle, &numCPUBusy );
+    }
+    // TODO: wait for idle
+    (void)timeout;
+    return res;
 }
 
 //------------------------------------------------------------------------------
