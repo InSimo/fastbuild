@@ -73,15 +73,25 @@ public:
     bool        m_AllowLocalRace                    = true;
     uint16_t    m_DistributionPort                  = Protocol::PROTOCOL_PORT;
 
-    // Workers Control
     Array<AString> m_Workers;
-    bool        m_PerformWorkersControl             = true;
-    int32_t     m_WorkersInfoLevel                  = 0;
-    int32_t     m_WorkersSetMode                    = -1;
-    uint32_t    m_WorkersAddBlockingPid             = 0;
-    uint32_t    m_WorkersRemoveBlockingPid          = 0;
-    int32_t     m_WorkersGracePeriod                = 0;
-    int32_t     m_WorkersWaitTimeout                = 0;
+    // Workers Control
+    enum WorkerCommand
+    {
+        WORKER_COMMAND_INFO,
+        WORKER_COMMAND_SETMODE,
+        WORKER_COMMAND_ADDBLOCKING,
+        WORKER_COMMAND_REMOVEBLOCKING
+    };
+    struct WorkerCommandOptions
+    {
+        AString m_Worker; // empty = all workers
+        WorkerCommand m_Command;
+        int32_t m_Value;
+    };
+    Array<WorkerCommandOptions> m_WorkerCommands;
+    int32_t     m_WorkerCommandGracePeriod                = 0;
+    int32_t     m_WorkerCommandWaitTimeout                = 0;
+    bool        m_WorkerCommandIgnoreFailures             = false;
 
     // General Output
     bool        m_ShowInfo                          = false;

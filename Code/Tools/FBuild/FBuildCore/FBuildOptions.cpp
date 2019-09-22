@@ -207,12 +207,34 @@ FBuildOptions::OptionsResult FBuildOptions::ProcessCommandLine( int argc, char *
                 m_AllowDistributed = true;
                 continue;
             }
-            else if ( thisArg == "-workercmd" )
+            else if ( thisArg == "-workercmd" || thisArg == "-myworkercmd"  || thisArg == "-allworkerscmd" )
             {
+                buildNotNeeded = true; // this is an action outside of a normal build
+                WorkerCommandOptions cmd;
+                if ( thisArg == "-myworkercmd" )
+                {
+                    cmd.m_Worker = "127.0.0.1";
+                }
+                else if ( thisArg == "-allworkerscmd" )
+                {
+                    cmd.m_Worker = "*";
+                }
+                else
+                {
+                    int workerIndex = ( i + 1 );
+                    if ( workerIndex >= argc )
+                    {
+                        OUTPUT( "FBuild: Error: Missing <worker> for '%s' argument\n", thisArg.Get() );
+                        OUTPUT( "Try \"%s -help\"\n", programName.Get() );
+                        return OPTIONS_ERROR;
+                    }
+                    cmd.m_Worker = argv[ workerIndex ];
+                    i += 1; // skip extra arg we've consumed
+                }
                 int cmdIndex = ( i + 1 );
                 if ( cmdIndex >= argc )
                 {
-                    OUTPUT( "FBuild: Error: Missing <cmd> for '-workercmd' argument\n" );
+                    OUTPUT( "FBuild: Error: Missing <cmd> for '%s' argument\n", thisArg.Get() );
                     OUTPUT( "Try \"%s -help\"\n", programName.Get() );
                     return OPTIONS_ERROR;
                 }
@@ -220,53 +242,40 @@ FBuildOptions::OptionsResult FBuildOptions::ProcessCommandLine( int argc, char *
                 int valIndex = ( i + 2 );
                 if ( valIndex >= argc )
                 {
-                    OUTPUT( "FBuild: Error: Missing <value> for '-workercmd' argument\n" );
+                    OUTPUT( "FBuild: Error: Missing <value> for '%s' argument\n", thisArg.Get() );
                     OUTPUT( "Try \"%s -help\"\n", programName.Get() );
                     return OPTIONS_ERROR;
                 }
                 AStackString<> valStr ( argv[ valIndex ] );
                 i+=2; // skip extra arg we've consumed
-                m_AllowDistributed = true;
-                m_PerformWorkersControl = true;
-                buildNotNeeded = true; // this is an action outside of a normal build
-                if ( cmdStr == "info")
+                if ( cmdStr == "info" || cmdStr == "json")
                 {
+                    cmd.m_Command = FBuildOptions::WORKER_COMMAND_INFO;
                     PRAGMA_DISABLE_PUSH_MSVC( 4996 ) // This function or variable may be unsafe...
-                    sscanf( valStr.Get(), "%u", &m_WorkersInfoLevel );
+                    sscanf( valStr.Get(), "%i", &cmd.m_Value );
                     PRAGMA_DISABLE_POP_MSVC // 4996
-                    continue;
+                    if (cmdStr == "json")
+                    {
+                        cmd.m_Value = -cmd.m_Value; // we use negative info level internally for json requests
+                    }
                 }
-                else if ( cmdStr == "grace")
+                else if ( cmdStr == "setmode" )
                 {
-                    PRAGMA_DISABLE_PUSH_MSVC( 4996 ) // This function or variable may be unsafe...
-                    sscanf( valStr.Get(), "%i", &m_WorkersGracePeriod );
-                    PRAGMA_DISABLE_POP_MSVC // 4996
-                    continue;
-                }
-                else if ( cmdStr == "wait")
-                {
-                    PRAGMA_DISABLE_PUSH_MSVC( 4996 ) // This function or variable may be unsafe...
-                    sscanf( valStr.Get(), "%u", &m_WorkersWaitTimeout );
-                    PRAGMA_DISABLE_POP_MSVC // 4996
-                    continue;
-                }
-                else if ( cmdStr == "setmode")
-                {
-                    if ( valStr.EqualsI(                        "DISABLED" ) )
-                        m_WorkersSetMode = (int32_t) WorkerSettings::Mode::DISABLED;
-                    else if ( valStr.EqualsI(                   "WHEN_IDLE" ) )
-                        m_WorkersSetMode = (int32_t) WorkerSettings::Mode::WHEN_IDLE;
-                    else if ( valStr.EqualsI(                   "DEDICATED" ) )
-                        m_WorkersSetMode = (int32_t) WorkerSettings::Mode::DEDICATED;
-                    else if ( valStr.EqualsI(                   "PROPORTIONAL" ) )
-                        m_WorkersSetMode = (int32_t) WorkerSettings::Mode::PROPORTIONAL;
+                    cmd.m_Command = FBuildOptions::WORKER_COMMAND_SETMODE;
+                    if ( valStr.EqualsI(                        "disabled" ) )
+                        cmd.m_Value = (int32_t) WorkerSettings::Mode::DISABLED;
+                    else if ( valStr.EqualsI(                   "idle" ) )
+                        cmd.m_Value = (int32_t) WorkerSettings::Mode::WHEN_IDLE;
+                    else if ( valStr.EqualsI(                   "dedicated" ) )
+                        cmd.m_Value = (int32_t) WorkerSettings::Mode::DEDICATED;
+                    else if ( valStr.EqualsI(                   "proportional" ) )
+                        cmd.m_Value = (int32_t) WorkerSettings::Mode::PROPORTIONAL;
                     else
                     {
-                        OUTPUT( "FBuild: Error: Unrecognized <mode> for '-workercmd' argument\n" );
+                        OUTPUT( "FBuild: Error: Unrecognized <mode> for '%s' argument\n", thisArg.Get() );
                         OUTPUT( "Try \"%s -help\"\n", programName.Get() );
                         return OPTIONS_ERROR;
                     }
-                    continue;
                 }
                 else if ( cmdStr == "addblocking" || cmdStr == "removeblocking" )
                 {
@@ -278,20 +287,70 @@ FBuildOptions::OptionsResult FBuildOptions::ProcessCommandLine( int argc, char *
                     { // negative or 0 values means this process or its nth parent
                         pid = Process::GetParentId( Process::GetCurrentId(), -pid );
                     }
+                    cmd.m_Value = pid;
                     if ( cmdStr == "addblocking" )
                     {
-                        m_WorkersAddBlockingPid = (uint32_t)pid;
-                        continue;
+                        cmd.m_Command = FBuildOptions::WORKER_COMMAND_ADDBLOCKING;
                     }
                     else if ( cmdStr == "removeblocking" )
                     {
-                        m_WorkersRemoveBlockingPid = (uint32_t)pid;
+                        cmd.m_Command = FBuildOptions::WORKER_COMMAND_REMOVEBLOCKING;
+                    }
+                }
+                else
+                {
+                    OUTPUT( "FBuild: Error: Unrecognized <cmd> for '%s' argument\n", thisArg.Get() );
+                    OUTPUT( "Try \"%s -help\"\n", programName.Get() );
+                    return OPTIONS_ERROR;
+                }
+                m_WorkerCommands.Append(cmd);
+                continue;
+            }
+            else if ( thisArg == "-workercmdflag" )
+            {
+                int flagIndex = ( i + 1 );
+                if ( flagIndex >= argc )
+                {
+                    OUTPUT( "FBuild: Error: Missing <cmd> for '%s' argument\n", thisArg.Get() );
+                    OUTPUT( "Try \"%s -help\"\n", programName.Get() );
+                    return OPTIONS_ERROR;
+                }
+                AStackString<> flagStr ( argv[ flagIndex ] );
+                i += 1; // skip extra arg we've consumed
+                if (flagStr == "nofailure" )
+                {
+                    m_WorkerCommandIgnoreFailures = true;
+                    continue;
+                }
+                else if ( flagStr == "grace" || flagStr == "wait" )
+                {
+                    int valIndex = ( i + 2 );
+                    if ( valIndex >= argc )
+                    {
+                        OUTPUT( "FBuild: Error: Missing <value> for '%s' argument\n", thisArg.Get() );
+                        OUTPUT( "Try \"%s -help\"\n", programName.Get() );
+                        return OPTIONS_ERROR;
+                    }
+                    AStackString<> valStr ( argv[ valIndex ] );
+                    i += 1; // skip extra arg we've consumed
+                    if ( flagStr == "grace")
+                    {
+                        PRAGMA_DISABLE_PUSH_MSVC( 4996 ) // This function or variable may be unsafe...
+                        sscanf( valStr.Get(), "%i", &m_WorkerCommandGracePeriod );
+                        PRAGMA_DISABLE_POP_MSVC // 4996
+                        continue;
+                    }
+                    else if ( flagStr == "wait")
+                    {
+                        PRAGMA_DISABLE_PUSH_MSVC( 4996 ) // This function or variable may be unsafe...
+                        sscanf( valStr.Get(), "%u", &m_WorkerCommandWaitTimeout );
+                        PRAGMA_DISABLE_POP_MSVC // 4996
                         continue;
                     }
                 }
                 else
                 {
-                    OUTPUT( "FBuild: Error: Unrecognized <cmd> for '-workercmd' argument\n" );
+                    OUTPUT( "FBuild: Error: Unrecognized <flag> for '%s' argument\n", thisArg.Get() );
                     OUTPUT( "Try \"%s -help\"\n", programName.Get() );
                     return OPTIONS_ERROR;
                 }
@@ -484,7 +543,8 @@ FBuildOptions::OptionsResult FBuildOptions::ProcessCommandLine( int argc, char *
             buildNeeded = true; // this option implies performing a build
         }
     }
-    // We always perform a build, except if no targets or options implying a build is given AND an action not linked to a build is requested (cache trim, workers control, ...)
+    // We always perform a build, except if no targets or options implying a build is given
+    // AND an action not linked to a build is requested (cache trim, workers control, ...)
     m_PerformBuild = buildNeeded || !buildNotNeeded;
 
     if ( progressOptionSpecified == false )
@@ -645,8 +705,8 @@ void FBuildOptions::DisplayHelp( const AString & programName ) const
             " -distverbose   Print detailed info for distributed compilation.\n"
             " -workers [names] Use these specific workers. Multiple names can be\n"
             "                set by using this option multiple times, or using ','.\n"
-            "                If a pattern is used with '*', it will be applied to\n"
-            "                the list of workers from the BFF file or brokerage.\n" );
+            "                This option overrides the list of workers from the BFF\n"
+            "                file or brokerage.\n" );
     OUTPUT( "----------------------------------------------------------------------\n"
             "Build Options:\n"
             " -cache[read|write] Control use of the build cache.\n"
@@ -690,11 +750,17 @@ void FBuildOptions::DisplayHelp( const AString & programName ) const
             "                performed.\n"
             " -workercmd [worker] [cmd] [value] Send a command to a specific worker.\n"
             "                Note: most commands are meant for the localhost worker.\n"
+            " -myworkercmd [cmd] [value] Alias for -workercmd 127.0.0.1 cmd value.\n"
+            " -allworkerscmd [cmd] [value] Send a command to all workers, as set by\n"
+            "                the -workers option, or the BFF file, or brokerage.\n"
+            "                Note: controlling multiple workers may be rdangerousisky.\n"
+            "                This is mainly meant for the info command.\n"
             "   Commands:\n"
             "    info [level] Request each worker to show their status\n"
             "                level = 1 for oneline summary, 2 for per-CPU details)\n"
+            "    json [level] Same as info, but outputing the result in json format\n"
             "    setmode [mode] Set the worker mode\n"
-            "                mode = DISABLED | WHEN_IDLE | DEDICATED | PROPORTIONAL\n"
+            "                mode = disabled | idle | dedicated | proportional\n"
             "    [add|remove]blocking [pid] Add/Remove a process Id that blocks the\n"
             "                execution of jobs until it terminates.\n"
             "                pid > 0: a specific process (local to the worker).\n"
@@ -703,16 +769,16 @@ void FBuildOptions::DisplayHelp( const AString & programName ) const
             "                pid < 0: the nth parent of the fbuild process (can be\n"
             "                         called from an app/script requiring exclusive\n"
             "                         use of the computer until it finishes).\n"
+            " -workercmdflag [flag] [value] Set a flag value for commands to workers.\n"
+            "   Flags:\n"
             "    grace [seconds] Timeout until extra remaining jobs are killed\n"
             "                when using setmode or addblocking.\n"
             "    wait [seconds] Wait up to the given timeout for jobs to terminate\n"
             "                when using setmode or addblocking. The process will\n"
             "                return an error if jobs are still running.\n"
-            " -myworkercmd [cmd] [value] Alias for -workercmd localhost cmd value.\n"
-            " -allworkerscmd [cmd] [value] Send a command to all workers, as set by\n"
-            "                the -workers option, or the BFF file, or brokerage.\n"
-            "                Note: controlling multiple workers may be risky. This\n"
-            "                is mainly meant for the info command.\n"
+            "    nofailure   Ignore connections failures. Useful when the worker(s)\n"
+            "                may not be running, in which case it is not necessary to\n"
+            "                ask/wait for it to be blocked / disabled.\n"
             "----------------------------------------------------------------------\n" );
 }
 
