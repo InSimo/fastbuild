@@ -105,12 +105,31 @@ public:
     bool CacheOutputInfo() const;
     bool CacheTrim() const;
 
+    // This method should be called in order to be able to invoke worker commands and/or set a
+    // custom set of workers. It can only be called once, and must be called before Build().
+    // Errors are not reported here, as the completion can be asynchronous.
+    // performBuild should indicate whether Build() will be called afterward (as the JobQueue
+    // needs to be initialized accordingly).
+    // The worker arrays will be replaced by the list of discovered workers, replacing "*" if any.
+    void InitializeWorkers( bool performBuild, Array< AString > & buildWorkers, Array< AString > & controlWorkers );
+
+    // Worker Control Commands
+    // non-blocking
+    void WorkersSetMode( const Array< AString > & workers, int32_t mode, int gracePeriod = 0 );
+    void WorkersAddBlocking( const Array< AString > & workers, uint32_t pid, int gracePeriod = 0 );
+    void WorkersRemoveBlocking( const Array< AString > & workers, uint32_t pid );
+    // blocking
+    bool WorkersGetLastCommandResult();
+    bool WorkersDisplayInfo( const Array< AString > & workers, int32_t infoLevel );
+    bool WorkersWaitIdle( const Array< AString > & workers, int32_t timeout, int infoLevel = 0 );
+
 protected:
     bool GetTargets( const Array< AString > & targets, Dependencies & outDeps ) const;
 
     void UpdateBuildStatus( const Node * node );
 
-    void InitializeClient();
+    void InitializeJobQueue( uint32_t numWorkerThreads );
+    void InitializeClient( Array< AString > & buildWorkers, Array< AString > & controlWorkers );
 
     static bool s_StopBuild;
     static volatile bool s_AbortBuild;  // -fastcancel - TODO:C merge with StopBuild

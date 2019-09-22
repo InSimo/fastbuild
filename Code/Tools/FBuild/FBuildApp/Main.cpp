@@ -180,15 +180,106 @@ int Main(int argc, char * argv[])
         return FBUILD_ERROR_LOADING_BFF;
     }
 
-    if ( options.m_DisplayTargetList )
+    // initialize worker clients
+    Array< AString > buildWorkers; // list of workers for build
+    Array< AString > controlWorkers; // list of workers to send commands to
+    if ( ( options.m_PerformBuild && options.m_AllowDistributed ) || options.m_WorkerCommands.IsEmpty() == false )
     {
-        fBuild.DisplayTargetList( options.m_ShowHiddenTargets );
-        ctrlCHandler.DeregisterHandler(); // Ensure this happens before FBuild is destroyed
-        return FBUILD_OK;
+        // List the remote workers to be able to send commands and build if needed
+        if ( options.m_PerformBuild && options.m_AllowDistributed )
+        {
+            buildWorkers = options.m_Workers;
+        }
+        if ( options.m_WorkerCommands.IsEmpty() == false )
+        {
+            for (const FBuildOptions::WorkerCommandOptions& cmd : options.m_WorkerCommands)
+            {
+                if ( !controlWorkers.Find( cmd.m_Worker ) )
+                {
+                    controlWorkers.Append( cmd.m_Worker );
+                }
+            }
+        }
+        fBuild.InitializeWorkers( options.m_PerformBuild, buildWorkers, controlWorkers );
     }
 
     bool result = false;
-    if ( options.m_DisplayDependencyDB )
+    // this can be done in addition to other actions (i.e. before the actual build)
+    if ( options.m_WorkerCommands.IsEmpty() == false )
+    {
+        int32_t infoLevel = 0; // store the last info level, used to refresh status while waiting
+        Array< AString > singleWorker(1);
+        for (const FBuildOptions::WorkerCommandOptions& cmd : options.m_WorkerCommands)
+        {
+            result = false; // reset error status
+            int32_t waitTimeout = 0;
+            const Array< AString > * cmdWorkers;
+            if ( cmd.m_Worker == "*" )
+            {
+                cmdWorkers = &controlWorkers;
+            }
+            else
+            {
+                singleWorker.SetSize(1);
+                singleWorker[0] = cmd.m_Worker;
+                cmdWorkers = &singleWorker;
+            }
+
+            switch ( cmd.m_Command )
+            {
+                case FBuildOptions::WORKER_COMMAND_INFO:
+                    infoLevel = cmd.m_Value;
+                    result = fBuild.WorkersDisplayInfo( *cmdWorkers, cmd.m_Value );
+                    break;
+                case FBuildOptions::WORKER_COMMAND_SETMODE:
+                    result = true; // non-blocking
+                    fBuild.WorkersSetMode( *cmdWorkers, cmd.m_Value, options.m_WorkerCommandGracePeriod );
+                    waitTimeout = options.m_WorkerCommandWaitTimeout;
+                    break;
+                case FBuildOptions::WORKER_COMMAND_ADDBLOCKING:
+                    result = true; // non-blocking
+                    fBuild.WorkersAddBlocking( *cmdWorkers, (uint32_t)cmd.m_Value, options.m_WorkerCommandGracePeriod );
+                    waitTimeout = options.m_WorkerCommandWaitTimeout;
+                    break;
+                case FBuildOptions::WORKER_COMMAND_REMOVEBLOCKING:
+                    result = true; // non-blocking
+                    fBuild.WorkersRemoveBlocking( *cmdWorkers, (uint32_t)cmd.m_Value );
+                    break;
+            }
+            if (waitTimeout != 0 && result)
+            {
+                result = fBuild.WorkersWaitIdle( *cmdWorkers, waitTimeout, infoLevel );
+            }
+            if (!options.m_WorkerCommandIgnoreFailures && result)
+            {
+                // check success of non-blocking commands
+                result = fBuild.WorkersGetLastCommandResult();
+            }
+            if (!result && !options.m_WorkerCommandIgnoreFailures)
+            {
+                break; // stop trying to send commands
+            }
+        }
+        if (!result && !options.m_WorkerCommandIgnoreFailures)
+        {
+            if ( sharedData )
+            {
+                sharedData->ReturnCode = FBUILD_BUILD_FAILED;
+            }
+            ctrlCHandler.DeregisterHandler(); // Ensure this happens before FBuild is destroyed
+            return FBUILD_BUILD_FAILED;
+        }
+        // else continue the build
+        result = false; // reset error status
+    }
+
+    // these actions are exclusive (i.e. only one is executed)
+    if ( options.m_DisplayTargetList )
+    {
+        fBuild.DisplayTargetList( options.m_ShowHiddenTargets );
+        result = true;
+    }
+    else if ( options.m_DisplayDependencyDB )
     {
         result = fBuild.DisplayDependencyDB( options.m_Targets );
     }

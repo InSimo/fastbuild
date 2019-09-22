@@ -356,38 +356,118 @@ void FBuild::SaveDependencyGraph( IOStream & stream, const char* nodeGraphDBFile
     m_DependencyGraph->Save( stream, nodeGraphDBFile );
 }
 
+// InitializeJobQueue
+//------------------------------------------------------------------------------
+void FBuild::InitializeJobQueue( uint32_t numWorkerThreads )
+{
+    // create worker threads
+    m_JobQueue = FNEW( JobQueue( numWorkerThreads ) );
+}
+
 // InitializeClient
 //------------------------------------------------------------------------------
-void FBuild::InitializeClient()
+void FBuild::InitializeClient( Array< AString > & buildWorkers, Array< AString > & controlWorkers )
 {
-    // create the connection management system if needed
-    // (must be after JobQueue is created)
-    if ( m_Options.m_AllowDistributed &&  m_Client == nullptr )
-    {
-        const SettingsNode * settings = m_DependencyGraph->GetSettings();
+    const SettingsNode * settings = m_DependencyGraph->GetSettings();
 
-        Array< AString > workers;
+    // flag indicating that buildWorkers should use BFF/brokerage list
+    bool useDefaultForBuild = buildWorkers.Find("*") != nullptr;
+    // flag indicating that controlWorkers should use BFF/brokerage list
+    bool useDefaultForControl = (buildWorkers.IsEmpty() && controlWorkers.Find("*") != nullptr );
+    // flag indicating that controlWorkers should use buildWorkers list
+    bool useBuildForControl = (!buildWorkers.IsEmpty() && controlWorkers.Find("*") != nullptr );
+
+    // use workers from BFF or brokerage
+    Array< AString > defaultWorkers;
+    if ( useDefaultForBuild || useDefaultForControl )
+    {
         if ( settings->GetWorkerList().IsEmpty() )
         {
             // check for workers through brokerage
             // TODO:C This could be moved out of the main code path
-            m_WorkerBrokerage.FindWorkers( workers );
+            m_WorkerBrokerage.FindWorkers( defaultWorkers );
+            OUTPUT( "Distributed Compilation : %u Workers in pool '%s'\n", (uint32_t)defaultWorkers.GetSize(),
+                m_WorkerBrokerage.GetBrokerageRoot().Get() );
         }
         else
         {
-            workers = settings->GetWorkerList();
+            defaultWorkers = settings->GetWorkerList();
+            OUTPUT( "Distributed Compilation : %u Workers from BFF\n", (uint32_t)defaultWorkers.GetSize() );
         }
+    }
 
-        if ( workers.IsEmpty() )
+    if ( useDefaultForBuild )
+    {
+        // replace "*" with default workers
+        buildWorkers.FindAndErase( "*" );
+        if ( buildWorkers.IsEmpty() )
         {
-            FLOG_WARN( "No workers available - Distributed compilation disabled" );
-            m_Options.m_AllowDistributed = false;
+            buildWorkers = defaultWorkers;
         }
         else
         {
-            OUTPUT( "Distributed Compilation : %u Workers in pool '%s'\n", (uint32_t)workers.GetSize(), m_WorkerBrokerage.GetBrokerageRoot().Get() );
-            m_Client = FNEW( Client( workers, m_Options.m_DistributionPort, settings->GetWorkerConnectionLimit(), m_Options.m_DistVerbose ) );
+            for ( const AString& worker : defaultWorkers )
+            {
+                if ( buildWorkers.Find( worker ) == nullptr )
+                {
+                    buildWorkers.Append( worker );
+                }
+            }
         }
+    }
+
+    if ( useDefaultForControl || useBuildForControl )
+    {
+        const Array< AString > & allWorkers = useDefaultForBuild ? defaultWorkers : buildWorkers;
+        // replace "*" with default/build workers
+        controlWorkers.FindAndErase( "*" );
+        if ( controlWorkers.IsEmpty() )
+        {
+            controlWorkers = allWorkers;
+        }
+        else
+        {
+            for ( const AString& worker : allWorkers )
+            {
+                if ( controlWorkers.Find( worker ) == nullptr )
+                {
+                    controlWorkers.Append( worker );
+                }
+            }
+        }
+    }
+    if ( useDefaultForBuild && buildWorkers.IsEmpty() )
+    {
+        FLOG_WARN( "No workers available - Distributed compilation disabled" );
+        m_Options.m_AllowDistributed = false;
+    }
+    if ( !buildWorkers.IsEmpty() || !controlWorkers.IsEmpty() )
+    {
+        m_Client = FNEW( Client( buildWorkers, controlWorkers, m_Options.m_DistributionPort,
+            settings->GetWorkerConnectionLimit(), m_Options.m_DistVerbose ) );
+    }
+}
+
+// InitializeWorkers
+//------------------------------------------------------------------------------
+void FBuild::InitializeWorkers( bool performBuild,  Array< AString > & buildWorkers, Array< AString > & controlWorkers )
+{
+    if ( m_JobQueue == nullptr )
+    {
+        InitializeJobQueue( performBuild ? m_Options.m_NumWorkerThreads : 0 );
+    }
+
+    // Default value for buildWorkers
+    if ( buildWorkers.IsEmpty() && performBuild && m_Options.m_AllowDistributed )
+    {
+        buildWorkers.Append( AString( "*" ) ); // use default (brokerage or BFF) workers for build
+    }
+
+    // create the connection management system if needed
+    // (must be after JobQueue is created)
+    if ( !buildWorkers.IsEmpty() || !controlWorkers.IsEmpty() )
+    {
+        InitializeClient( buildWorkers, controlWorkers );
     }
 }
 
@@ -400,10 +480,23 @@ bool FBuild::Build( Node * nodeToBuild )
     AtomicStoreRelaxed( &s_StopBuild, false ); // allow multiple runs in same process
     AtomicStoreRelaxed( &s_AbortBuild, false ); // allow multiple runs in same process
 
-    // create worker threads
-    m_JobQueue = FNEW( JobQueue( m_Options.m_NumWorkerThreads ) );
+    if ( m_JobQueue == nullptr )
+    {
+        InitializeJobQueue( m_Options.m_NumWorkerThreads );
+    }
 
-    InitializeClient();
+    // create the connection management system if needed
+    // (must be after JobQueue is created)
+    if ( m_Options.m_AllowDistributed &&  m_Client == nullptr )
+    {
+        Array< AString > buildWorkers ( m_Options.m_Workers ); // list of workers for build
+        Array< AString > controlWorkers; // list of workers to send commands to (empty / ignored here)
+        if ( buildWorkers.IsEmpty() )
+        {
+            buildWorkers.Append( AString( "*" ) ); // use default (brokerage or BFF) workers for build
+        }
+        InitializeClient( buildWorkers, controlWorkers );
+    }
 
     m_Timer.Start();
     m_LastProgressOutputTime = 0.0f;
@@ -847,6 +940,95 @@ bool FBuild::CacheTrim() const
 
     OUTPUT( "- Cache not configured\n" );
     return false;
+}
+
+
+// WorkersSetMode
+//------------------------------------------------------------------------------
+void FBuild::WorkersSetMode( const Array< AString > & workers, int32_t mode, int gracePeriod )
+{
+    if ( m_Client )
+    {
+        m_Client->WorkersSetMode( workers, mode, gracePeriod );
+    }
+    else
+    {
+        OUTPUT( "WorkersSetMode: Client not configured\n" );
+    }
+}
+
+// WorkersAddBlocking
+//------------------------------------------------------------------------------
+void FBuild::WorkersAddBlocking( const Array< AString > & workers, uint32_t pid, int gracePeriod )
+{
+    if ( m_Client )
+    {
+        m_Client->WorkersAddBlocking( workers, pid, gracePeriod );
+    }
+    else
+    {
+        OUTPUT( "WorkersAddBlocking: Client not configured\n" );
+    }
+}
+
+// WorkersRemoveBlocking
+//------------------------------------------------------------------------------
+void FBuild::WorkersRemoveBlocking( const Array< AString > & workers, uint32_t pid )
+{
+    if ( m_Client )
+    {
+        m_Client->WorkersRemoveBlocking( workers, pid );
+    }
+    else
+    {
+        OUTPUT( "WorkersRemoveBlocking: Client not configured\n" );
+    }
+}
+
+// WorkersDisplayInfo
+//------------------------------------------------------------------------------
+bool FBuild::WorkersDisplayInfo( const Array< AString > & workers, int32_t infoLevel )
+{
+    if ( m_Client )
+    {
+        return m_Client->WorkersDisplayInfo( workers, infoLevel );
+    }
+    else
+    {
+        OUTPUT( "WorkersDisplayInfo: Client not configured\n" );
+        return false;
+    }
+}
+
+// WorkersGetLastCommandResult
+//------------------------------------------------------------------------------
+bool FBuild::WorkersGetLastCommandResult()
+{
+    if ( m_Client )
+    {
+        return m_Client->WorkersGetLastCommandResult();
+    }
+    else
+    {
+        OUTPUT( "WorkersGetLastCommandResult: Client not configured\n" );
+        return false;
+    }
+}
+
+// WorkersWaitIdle
+//------------------------------------------------------------------------------
+bool FBuild::WorkersWaitIdle( const Array< AString > & workers, int32_t timeout, int infoLevel )
+{
+    OUTPUT( "WorkersWaitIdle:\n" );
+    if ( m_Client )
+    {
+        return m_Client->WorkersWaitIdle( workers, timeout, infoLevel );
+    }
+    else
+    {
+        OUTPUT( " - Client not configured\n" );
+        return false;
+    }
 }
 
 //------------------------------------------------------------------------------
