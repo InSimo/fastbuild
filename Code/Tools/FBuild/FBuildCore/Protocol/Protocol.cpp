@@ -205,13 +205,13 @@ Protocol::MsgRequestServerInfo::MsgRequestServerInfo( uint8_t detailsLevel )
 //------------------------------------------------------------------------------
 Protocol::MsgServerInfo::MsgServerInfo(
         uint8_t mode, uint16_t numClients, uint16_t numCPUTotal,
-        uint16_t numCPUAvailable, uint16_t numCPUBusy, uint16_t numBlockingProcesses,
+        uint16_t numCPUIdle, uint16_t numCPUBusy, uint16_t numBlockingProcesses,
         float cpuUsageFASTBuild, float cpuUsageTotal )
     : Protocol::IMessage( Protocol::MSG_SERVER_INFO, sizeof( MsgServerInfo ), true )
     , m_Mode( mode )
     , m_NumClients( numClients )
     , m_NumCPUTotal( numCPUTotal )
-    , m_NumCPUAvailable( numCPUAvailable )
+    , m_NumCPUIdle( numCPUIdle )
     , m_NumCPUBusy( numCPUBusy )
     , m_NumBlockingProcesses( numBlockingProcesses )
     , m_CPUUsageFASTBuild( cpuUsageFASTBuild )

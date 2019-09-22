@@ -254,12 +254,12 @@ namespace Protocol
     {
     public:
         MsgServerInfo( uint8_t mode, uint16_t numClients, uint16_t numCPUTotal,
-                       uint16_t numCPUAvailable, uint16_t numCPUBusy, uint16_t numBlockingProcesses,
+                       uint16_t numCPUIdle, uint16_t numCPUBusy, uint16_t numBlockingProcesses,
                        float cpuUsageFASTBuild, float cpuUsageTotal );
 
         inline uint8_t  GetMode() const { return m_Mode; }
         inline uint16_t GetNumCPUTotal() const { return m_NumCPUTotal; }
-        inline uint16_t GetNumCPUAvailable() const { return m_NumCPUAvailable; }
+        inline uint16_t GetNumCPUIdle() const { return m_NumCPUIdle; }
         inline uint16_t GetNumCPUBusy() const { return m_NumCPUBusy; }
         inline uint16_t GetNumClients() const { return m_NumClients; }
         inline uint16_t GetNumBlockingProcesses() const { return m_NumBlockingProcesses; }
@@ -270,7 +270,7 @@ namespace Protocol
         char     m_Padding2[ 1 ];
         uint16_t m_NumClients;
         uint16_t m_NumCPUTotal;
-        uint16_t m_NumCPUAvailable;
+        uint16_t m_NumCPUIdle;
         uint16_t m_NumCPUBusy;
         uint16_t m_NumBlockingProcesses;
         float    m_CPUUsageFASTBuild;
