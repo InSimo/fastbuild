@@ -35,6 +35,11 @@ namespace Math
     {
         return ( ( ( value - 1 ) & value ) == 0 );
     }
+    template <class T>
+    static inline T Abs( T a )
+    {
+        return (a >= 0) ? a : -a;
+    }
 
 };
 
