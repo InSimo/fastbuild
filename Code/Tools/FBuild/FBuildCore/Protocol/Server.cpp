@@ -151,7 +151,7 @@ bool Server::IsSynchingTool( AString & statusStr ) const
     ASSERT( iter );
     m_ClientList.Erase( iter );
 
-    // because we cancelled manifest syncrhonization, we need to check if other
+    // because we cancelled manifest synchronization, we need to check if other
     // connections are waiting for the same manifest
     {
         ClientState ** it = m_ClientList.Begin();
