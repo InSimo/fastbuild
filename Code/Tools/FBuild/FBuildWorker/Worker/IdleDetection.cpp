@@ -129,6 +129,7 @@ bool IdleDetection::IsIdleInternal( float & idleCurrent )
     // check to know acurately what the cpu use of FASTBuild is
     if ( m_CPUUsageTotal < IDLE_DETECTION_THRESHOLD_PERCENT )
     {
+        m_CPUUsageFASTBuild = 0.0f;
         idleCurrent = 1.0f;
         return true;
     }
