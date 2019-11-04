@@ -17,6 +17,7 @@
 #include "Core/Process/Atomic.h"
 #include "Core/Process/Thread.h"
 #include "Core/Profile/Profile.h"
+#include "Core/Tracing/Tracing.h"
 
 // JobCostSorter
 //------------------------------------------------------------------------------
@@ -25,6 +26,8 @@ class JobCostSorter
 public:
     inline bool operator () ( const Job * job1, const Job * job2 ) const
     {
+        int32_t diff = job1->GetNode()->GetPriority() - job2->GetNode()->GetPriority();
+        if (diff != 0) return diff < 0;
         return ( job1->GetNode()->GetRecursiveCost() < job2->GetNode()->GetRecursiveCost() );
     }
 };
@@ -252,6 +255,9 @@ void JobQueue::AddJobToBatch( Node * node )
         }
         return;
     }
+
+    //DEBUGSPAM( "AddJobToBatch %s %s: priority %d cost %u\n", node->GetTypeName(),
+    //    node->GetName().Get(), node->GetPriority(), node->GetRecursiveCost() );
 
     m_LocalJobs_Staging.Append( node );
 }

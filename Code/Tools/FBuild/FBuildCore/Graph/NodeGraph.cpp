@@ -1060,7 +1060,7 @@ void NodeGraph::DoBuildPass( Node * nodeToBuild )
                     upToDateCount++;
                 }
 
-                // Check for failure again propagatating overall state more quickly. This aallows failed
+                // Check for failure again propagating overall state more quickly. This allows failed
                 // builds to terminate moe quickly
                 if ( n->GetState() == Node::FAILED )
                 {
@@ -1098,7 +1098,9 @@ void NodeGraph::BuildRecurse( Node * nodeToBuild, uint32_t cost )
     ASSERT( nodeToBuild->GetState() != Node::BUILDING );
 
     // accumulate recursive cost
-    cost += nodeToBuild->GetLastBuildTime();
+    cost = nodeToBuild->ComputeRecursiveCost(cost);
+
+    nodeToBuild->m_RecursiveCost = cost;
 
     // check pre-build dependencies
     if ( nodeToBuild->GetState() == Node::NOT_PROCESSED )
@@ -1164,7 +1166,6 @@ void NodeGraph::BuildRecurse( Node * nodeToBuild, uint32_t cost )
     nodeToBuild->SetStatFlag( Node::STATS_PROCESSED );
     if ( nodeToBuild->DetermineNeedToBuild( forceClean ) )
     {
-        nodeToBuild->m_RecursiveCost = cost;
         JobQueue::Get().AddJobToBatch( nodeToBuild );
     }
     else
@@ -1198,7 +1199,7 @@ bool NodeGraph::CheckDependencies( Node * nodeToBuild, const Dependencies & depe
         if ( state < Node::BUILDING )
         {
             // early out if already seen
-            if ( n->GetBuildPassTag() != passTag )
+            if ( n->GetBuildPassTag() != passTag)
             {
                 // prevent multiple recursions in this pass
                 n->SetBuildPassTag( passTag );
@@ -1215,13 +1216,11 @@ bool NodeGraph::CheckDependencies( Node * nodeToBuild, const Dependencies & depe
             continue;
         }
 
-        if ( state == Node::BUILDING )
+        // ensure deepest traversal cost is kept
+        if ( state <= Node::BUILDING)
         {
             // ensure deepest traversal cost is kept
-            if ( cost > nodeToBuild->m_RecursiveCost )
-            {
-                nodeToBuild->m_RecursiveCost = cost;
-            }
+            UpdateBuildCostRecurse( n, cost );
         }
 
         allDependenciesUpToDate = false;
@@ -1253,6 +1252,57 @@ bool NodeGraph::CheckDependencies( Node * nodeToBuild, const Dependencies & depe
     }
 
     return allDependenciesUpToDate;
+}
+
+// UpdateBuildCostRecurse
+//------------------------------------------------------------------------------
+void NodeGraph::UpdateBuildCostRecurse( Node * nodeToBuild, uint32_t cost )
+{
+    // This method is faster than a full BuildRecurse when we only need to propagate a higher recursive cost to all dependencies.
+    // The basic idea is that for any given State, there is only one list of dependency that is "active", i.e. blocking progress
+    // on this node.
+    // It can also be called for BUILDING nodes, in which case only this node's cost is updated.
+
+    ASSERT( nodeToBuild );
+
+    // already building, or queued to build?
+    ASSERT( nodeToBuild->GetState() <= Node::BUILDING );
+
+    // accumulate recursive cost
+    cost = nodeToBuild->ComputeRecursiveCost(cost);
+
+    if (cost <= nodeToBuild->m_RecursiveCost)
+    {
+        return; // the previous cost was higher, stop the propagation
+    }
+
+    nodeToBuild->m_RecursiveCost = cost;
+
+    const Dependencies* dependencies = nullptr;
+    switch (nodeToBuild->GetState())
+    {
+        case Node::NOT_PROCESSED: dependencies = &nodeToBuild->GetPreBuildDependencies(); break;
+        case Node::PRE_DEPS_READY: dependencies = &nodeToBuild->GetStaticDependencies(); break;
+        case Node::STATIC_DEPS_READY: ASSERT( false ); break; // this state should not be possible if BuildRecurse was called previously
+        case Node::DYNAMIC_DEPS_DONE: dependencies = &nodeToBuild->GetDynamicDependencies(); break;
+        case Node::BUILDING: dependencies = nullptr; break; // no dependencies to update if this node is building
+        default: ASSERT( false ); break;
+    }
+
+    if (dependencies != nullptr)
+    {
+        Dependencies::Iter i = dependencies->Begin();
+        Dependencies::Iter end = dependencies->End();
+        for ( ; i < end; ++i )
+        {
+            Node * n = i->GetNode();
+            Node::State state = n->GetState();
+            if (state <= Node::BUILDING)
+            {
+                UpdateBuildCostRecurse( n, cost );
+            }
+        }
+    }
 }
 
 // CleanPath

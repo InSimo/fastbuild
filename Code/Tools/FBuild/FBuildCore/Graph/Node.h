@@ -142,6 +142,7 @@ public:
     inline uint32_t GetProcessingTime() const   { return m_ProcessingTime; }
     inline uint32_t GetCachingTime() const      { return m_CachingTime; }
     inline uint32_t GetRecursiveCost() const    { return m_RecursiveCost; }
+    uint32_t ComputeRecursiveCost(uint32_t cost) const;
 
     inline uint32_t GetProgressAccumulator() const { return m_ProgressAccumulator; }
     inline void     SetProgressAccumulator( uint32_t p ) const { m_ProgressAccumulator = p; }

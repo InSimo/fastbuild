@@ -348,22 +348,36 @@ void Node::SetLastBuildTime( uint32_t ms )
     AtomicStoreRelaxed( &m_LastBuildTimeMs, ms );
 }
 
+// ComputeRecursiveCost
+//------------------------------------------------------------------------------
+uint32_t Node::ComputeRecursiveCost(uint32_t cost) const
+{
+    cost += GetLastBuildTime();
+    int32_t p = GetPriority();
+    if (p > 0)
+    {
+        cost += p * 10000; // TODO: make weight of priority tunable. Currently 10s for each level
+    }
+    return cost;
+}
+
 // GetPriority
 //------------------------------------------------------------------------------
 int32_t Node::GetPriority() const
 {
     switch (GetType())
     {
-    case Node::TEST_NODE:           return 9;
-    case Node::EXEC_NODE:           return 8;
-    case Node::EXE_NODE:            return 7;
-    case Node::DLL_NODE:            return 6;
-    case Node::LIBRARY_NODE:        return 5;
-    case Node::CS_NODE:             return 4;
-    case Node::OBJECT_LIST_NODE:    return 3;
-    case Node::OBJECT_NODE:         return 2;
-    case Node::UNITY_NODE:          return 1;
-    default:                        return 0;
+        case Node::DLL_NODE:            return 5; // highest priority because of long link dependencies chains
+        case Node::LIBRARY_NODE:        return 5;
+        case Node::EXE_NODE:            return 4; // executable sightly less because they are the leafs of the link
+        case Node::TEST_NODE:           return 3; // then local tasks
+        case Node::EXEC_NODE:           return 3;
+        case Node::UNITY_NODE:          return 1; // lowest priority to compilation units
+        case Node::OBJECT_LIST_NODE:    return 1;
+        case Node::CS_NODE:             return 0;
+        case Node::OBJECT_NODE:         return GetSubPriority(); // 1 if local-only, 0 if distributed
+
+        default:                        return 2; // other nodes are inbetween local and remote priority
     }
 }
 

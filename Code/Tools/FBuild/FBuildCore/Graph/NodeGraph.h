@@ -149,6 +149,7 @@ private:
 
     void BuildRecurse( Node * nodeToBuild, uint32_t cost );
     bool CheckDependencies( Node * nodeToBuild, const Dependencies & dependencies, uint32_t cost );
+    void UpdateBuildCostRecurse( Node * nodeToBuild, uint32_t cost );
     static void UpdateBuildStatusRecurse( const Node * node,
                                           uint32_t & nodesBuiltTime,
                                           uint32_t & totalNodeTime );
