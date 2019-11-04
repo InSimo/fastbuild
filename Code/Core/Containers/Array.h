@@ -805,8 +805,8 @@ public:
     bool FindDerefAndErase( const U & obj ) = delete;
 
     // add/remove items
-    void Append( const T & item );
-    void Append( T && item );
+    T * Append( const T & item );
+    T * Append( T && item );
     template < class U >
     void Append( const Array< U > & other );
     template < class U >
@@ -867,7 +867,7 @@ bool SortedArray< T, COMPARER >::FindAndErase( const U & obj )
 // Append
 //------------------------------------------------------------------------------
 template < class T, class COMPARER >
-void SortedArray< T, COMPARER >::Append( const T & item )
+T * SortedArray< T, COMPARER >::Append( const T & item )
 {
     if ( this->m_Size == ( this->m_CapacityAndFlags & CAPACITY_MASK ) )
     {
@@ -890,12 +890,13 @@ void SortedArray< T, COMPARER >::Append( const T & item )
         *( pos ) = item;
     }
     this->m_Size++;
+    return pos;
 }
 
 // Append
 //------------------------------------------------------------------------------
 template < class T, class COMPARER >
-void SortedArray< T, COMPARER >::Append( T && item )
+T * SortedArray< T, COMPARER >::Append( T && item )
 {
     if ( this->m_Size == ( this->m_CapacityAndFlags & CAPACITY_MASK ) )
     {
@@ -918,6 +919,7 @@ void SortedArray< T, COMPARER >::Append( T && item )
         *( pos ) = Move( item );
     }
     this->m_Size++;
+    return pos;
 }
 
 // Append
