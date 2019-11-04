@@ -163,6 +163,27 @@ Job * JobQueueRemote::GetCompletedJob()
     return nullptr;
 }
 
+// HasInFlightJobs
+//------------------------------------------------------------------------------
+bool JobQueueRemote::HasInFlightJobs()
+{
+    MutexHolder mh( m_InFlightJobsMutex );
+    return m_InFlightJobs.IsEmpty();
+}
+
+// CancelInFlightJobs
+//------------------------------------------------------------------------------
+void JobQueueRemote::CancelInFlightJobs()
+{
+    MutexHolder mh( m_InFlightJobsMutex );
+    Job ** it = m_InFlightJobs.Begin();
+    while ( it != m_InFlightJobs.End() )
+    {
+        ( *it )->Cancel();
+        ++it;
+    }
+}
+
 // CancelJobsWithUserData
 //------------------------------------------------------------------------------
 void JobQueueRemote::CancelJobsWithUserData( void * userData )

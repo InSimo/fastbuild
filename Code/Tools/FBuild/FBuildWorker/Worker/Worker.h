@@ -39,6 +39,7 @@ private:
     void UpdateAvailability();
     void UpdateUI();
     void CheckForExeUpdate();
+    void CheckGracePeriod();
     bool HasEnoughDiskSpace();
 
     inline bool InConsoleMode() const { return m_ConsoleMode; }
@@ -65,6 +66,7 @@ private:
     #endif
     mutable AString     m_LastStatusMessage;
     Thread::ThreadHandle m_WorkThread;
+    int64_t             m_KillJobsAfterTime;
 };
 
 //------------------------------------------------------------------------------

@@ -56,7 +56,8 @@ Job::~Job()
 //------------------------------------------------------------------------------
 void Job::Cancel()
 {
-    ASSERT( m_IsLocal ); // Cancellation should only occur locally
+    //CHANGE: Cancel can now be called by workers for remote jobs (i.e. kill jobs that are still running after a grace period)
+    //ASSERT( m_IsLocal ); // Cancellation should only occur locally
     ASSERT( m_Abort == false ); // Job must be not already be cancelled
     AtomicStoreRelaxed( &m_Abort, true );
 }

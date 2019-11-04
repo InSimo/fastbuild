@@ -46,7 +46,7 @@ public:
     uint8_t GetRequestedServerInfoLevel();
     void SendServerInfo( const Protocol::MsgServerInfo & msg, const MemoryStream & payload );
 
-    bool GetRequestedChanges( uint32_t& mode, Array<uint32_t>& addedBlockingPid, Array<uint32_t>& removedBlockingPid, uint64_t& killAfter );
+    bool GetRequestedChanges( uint32_t& mode, Array<uint32_t>& addedBlockingPid, Array<uint32_t>& removedBlockingPid, int64_t& killAfter );
 
 private:
     // TCPConnection interface
@@ -111,7 +111,7 @@ private:
     mutable Mutex           m_RequestsMutex;
     uint8_t                 m_RequestedServerInfoLevel;
     uint32_t                m_RequestedMode;
-    uint64_t                m_RequestedKillAfter;
+    int64_t                 m_RequestedKillAfter;
     Array<uint32_t>         m_AddedBlockingPid;
     Array<uint32_t>         m_RemovedBlockingPid;
 };

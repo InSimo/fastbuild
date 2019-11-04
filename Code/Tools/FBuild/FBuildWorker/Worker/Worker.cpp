@@ -45,6 +45,7 @@ Worker::Worker( const AString & args, bool consoleMode )
     #if defined( __WINDOWS__ )
         , m_LastDiskSpaceResult( -1 )
     #endif
+    , m_KillJobsAfterTime( 0 )
 {
     m_WorkerSettings = FNEW( WorkerSettings );
     m_NetworkStartupHelper = FNEW( NetworkStartupHelper );
@@ -205,6 +206,8 @@ uint32_t Worker::WorkThread()
 
         CheckForExeUpdate();
 
+        CheckGracePeriod();
+
         PROFILE_SYNCHRONIZE
 
         Thread::Sleep( 500 );
@@ -268,8 +271,8 @@ void Worker::UpdateAvailability()
     Array<uint32_t> blockingPidToAdd;
     Array<uint32_t> blockingPidToRemove;
     uint32_t modeToSet = (uint32_t)ws.GetMode();
-    uint64_t killAfter = 0;
-    m_ConnectionPool->GetRequestedChanges(modeToSet, blockingPidToAdd, blockingPidToRemove, killAfter);
+    int64_t killAfter = 0;
+    m_ConnectionPool->GetRequestedChanges( modeToSet, blockingPidToAdd, blockingPidToRemove, killAfter );
     if (modeToSet != (uint32_t)ws.GetMode())
     {
         ws.SetMode((WorkerSettings::Mode)modeToSet);
@@ -280,7 +283,7 @@ void Worker::UpdateAvailability()
         }
     }
 
-    m_IdleDetection.Update(blockingProcessNames, blockingPidToAdd, blockingPidToRemove);
+    m_IdleDetection.Update( blockingProcessNames, blockingPidToAdd, blockingPidToRemove );
 
     switch( ws.GetMode() )
     {
@@ -334,6 +337,25 @@ void Worker::UpdateAvailability()
         numCPUsToUse = 0;
     }
 
+    if ( numCPUsToUse > 0 )
+    {
+        // cancel any pre-existing timeouts
+        this->m_KillJobsAfterTime = 0;
+    }
+    else if ( WorkerThreadRemote::GetNumCPUsToUse() > 0 )
+    {
+        // set a timeout when running jobs should be killed
+        if ( killAfter == 0 )
+        {
+            uint32_t gracePeriod = m_IdleDetection.IsBlocked() ? ws.GetBlockingGracePeriod() : ws.GetGracePeriod();
+            if ( gracePeriod != 0 )
+            {
+                killAfter = Timer::GetNow() + gracePeriod * Timer::GetFrequency();
+            }
+        }
+        this->m_KillJobsAfterTime = killAfter;
+    }
+
     WorkerThreadRemote::SetNumCPUsToUse( numCPUsToUse );
 
     m_WorkerBrokerage.SetAvailability( numCPUsToUse > 0);
@@ -369,6 +391,18 @@ void Worker::UpdateUI()
         for ( const auto& bpi : m_IdleDetection.GetBlockingProcesses() )
         {
             status.AppendFormat(" %s(%u)", bpi.m_Name.Get(), bpi.m_PID);
+        }
+    }
+    if ( m_KillJobsAfterTime != 0 && JobQueueRemote::Get().HasInFlightJobs() )
+    {
+        float time = (m_KillJobsAfterTime - Timer::GetNow()) * Timer::GetFrequencyInvFloat();
+        if ( time <= 0.5f )
+        {
+            status += " (Killing running jobs)";
+        }
+        else
+        {
+            status.AppendFormat( " (Killing jobs after %ds)", (int)time );
         }
     }
     if ( InConsoleMode() )
@@ -489,6 +523,22 @@ void Worker::CheckForExeUpdate()
         m_RestartNeeded = true;
         JobQueueRemote::Get().SignalStopWorkers();
     }
+}
+
+// CheckGracePeriod
+//------------------------------------------------------------------------------
+void Worker::CheckGracePeriod()
+{
+    if ( this->m_KillJobsAfterTime == 0 || this->m_KillJobsAfterTime - Timer::GetNow() > 0 )
+    {
+        return;
+    }
+
+    // timeout expired. kill any remaining jobs
+    JobQueueRemote & jqr = JobQueueRemote::Get();
+    jqr.CancelInFlightJobs();
+
+    this->m_KillJobsAfterTime = 0;
 }
 
 // StatusMessage

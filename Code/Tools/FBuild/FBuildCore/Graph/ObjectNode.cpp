@@ -2346,8 +2346,17 @@ bool ObjectNode::BuildFinalOutput( Job * job, const Args & fullArgs ) const
     CompileHelper ch( true, job->GetAbortFlagPointer() );
     if ( !ch.SpawnCompiler( job, GetName(), GetCompiler(), compiler, fullArgs, workingDir.IsEmpty() ? nullptr : workingDir.Get() ) )
     {
+        // did we abort?
+        if ( ch.HasAborted() )
+        {
+            // for remote jobs, we transmit aborts as a system error, so that it will be retried with a different worker
+            if ( job->IsLocal() == false)
+            {
+                job->OnSystemError();
+            }
+        }
         // did spawn fail, or did we spawn and fail to compile?
-        if ( ch.GetResult() != 0 )
+        else if ( ch.GetResult() != 0 )
         {
             // failed to compile
 

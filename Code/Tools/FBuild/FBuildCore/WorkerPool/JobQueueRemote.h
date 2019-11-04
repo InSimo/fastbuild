@@ -29,6 +29,8 @@ public:
     void QueueJob( Job * job );
     Job * GetCompletedJob();
     void CancelJobsWithUserData( void * userData );
+    bool HasInFlightJobs();
+    void CancelInFlightJobs();
 
     // handle shutting down
     void SignalStopWorkers();

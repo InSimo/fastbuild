@@ -510,8 +510,8 @@ void Server::Process( const ConnectionInfo * connection, const Protocol::MsgSetM
     uint16_t gracePeriod = msg->GetGracePeriod();
     if (gracePeriod != 0)
     {
-        uint64_t killAfter = Timer::GetNow() + gracePeriod * Timer::GetFrequency();
-        if (m_RequestedKillAfter == 0 || m_RequestedKillAfter > killAfter)
+        int64_t killAfter = Timer::GetNow() + gracePeriod * Timer::GetFrequency();
+        if (m_RequestedKillAfter == 0 || m_RequestedKillAfter - killAfter > 0)
             m_RequestedKillAfter = killAfter;
     }
     // Wake main thread to handle requested change
@@ -528,8 +528,8 @@ void Server::Process( const ConnectionInfo * connection, const Protocol::MsgAddB
     uint16_t gracePeriod = msg->GetGracePeriod();
     if (gracePeriod != 0)
     {
-        uint64_t killAfter = Timer::GetNow() + gracePeriod * Timer::GetFrequency();
-        if (m_RequestedKillAfter == 0 || m_RequestedKillAfter > killAfter)
+        int64_t killAfter = Timer::GetNow() + gracePeriod * Timer::GetFrequency();
+        if (m_RequestedKillAfter == 0 || m_RequestedKillAfter - killAfter > 0)
             m_RequestedKillAfter = killAfter;
     }
     // Wake main thread to handle requested change
@@ -815,7 +815,7 @@ void Server::SendServerInfo( const Protocol::MsgServerInfo & msg, const MemorySt
 
 // GetRequestedChanges
 //------------------------------------------------------------------------------
-bool Server::GetRequestedChanges( uint32_t& mode, Array<uint32_t>& addedBlockingPid, Array<uint32_t>& removedBlockingPid, uint64_t& killAfter )
+bool Server::GetRequestedChanges( uint32_t& mode, Array<uint32_t>& addedBlockingPid, Array<uint32_t>& removedBlockingPid, int64_t& killAfter )
 {
 
     PROFILE_FUNCTION
