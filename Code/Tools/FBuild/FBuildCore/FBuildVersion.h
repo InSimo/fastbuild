@@ -4,7 +4,7 @@
 
 // Defines
 //------------------------------------------------------------------------------
-#define FBUILD_VERSION_STRING "v0.99n"
+#define FBUILD_VERSION_STRING "v0.99is"
 #define FBUILD_VERSION (uint32_t)99
 #if defined( __WINDOWS__ )
     #define FBUILD_VERSION_PLATFORM "Windows"
