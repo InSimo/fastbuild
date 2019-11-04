@@ -44,7 +44,6 @@ IdleDetection::IdleDetection()
     , m_IdleSmoother( 0 )
     , m_IdleFloatSmoother ( 0 )
     , m_IsBlocked( false )
-    , m_NumBlockingProcesses( 0 )
     , m_Processes( 32, true )
     , m_LastTimeIdle( 0 )
     , m_LastTimeBusy( 0 )
@@ -151,12 +150,12 @@ bool IdleDetection::IsIdleInternal( float & idleCurrent, const Array<AString>& b
     {
         // iterate all processes
         UpdateProcessList( blockingProcessNames, addedBlockingPid, removedBlockingPid );
+        m_IsBlocked = (GetNumBlockingProcesses() > 0);
 
         // accumulate cpu usage for processes we care about
         if (systemTime) // skip first update
         {
             float totalPerc(0.0f);
-            uint32_t numBlocking = 0;
 
             for ( ProcessInfo & pi : m_Processes)
             {
@@ -176,15 +175,9 @@ bool IdleDetection::IsIdleInternal( float & idleCurrent, const Array<AString>& b
                     }
                     pi.m_LastTime = totalTime;
                 }
-                else if ( ( pi.m_Flags & ProcessInfo::FLAG_BLOCKING ) != 0 )
-                {
-                    ++numBlocking;
-                }
             }
 
             m_CPUUsageFASTBuild = totalPerc;
-            m_NumBlockingProcesses = numBlocking;
-            m_IsBlocked = (numBlocking > 0);
         }
 
         m_Timer.Start();
@@ -342,11 +335,13 @@ void IdleDetection::UpdateProcessList( const Array<AString>& blockingProcessName
         while ( Process32Next( hSnapShot, &thProcessInfo ) != FALSE )
         {
             const uint32_t pid = thProcessInfo.th32ProcessID;
+            bool wasBlocking = false;
             ProcessInfo * info = m_Processes.Find( pid );
             if ( info )
             {
                 // an existing process that is still alive
                 info->m_AliveValue = sAliveValue; // still active
+                wasBlocking = ( info->m_Flags & ProcessInfo::FLAG_BLOCKING ) != 0;
             }
             else
             {
@@ -367,12 +362,13 @@ void IdleDetection::UpdateProcessList( const Array<AString>& blockingProcessName
                         newProcess.m_AliveValue = sAliveValue;
                         newProcess.m_LastTime = 0;
                         newProcess.m_Flags = ProcessInfo::FLAG_IN_OUR_HIERARCHY;
-                        m_Processes.Append( newProcess );
+                        info = m_Processes.Append( newProcess );
                     }
                     else
                     {
-                        // gracefully handle failure to open proces
+                        // gracefully handle failure to open process
                         // maybe it closed before we got to it
+                        continue;
                     }
                 }
                 else
@@ -385,8 +381,34 @@ void IdleDetection::UpdateProcessList( const Array<AString>& blockingProcessName
                     newProcess.m_LastTime = 0;
                     newProcess.m_Flags = 0;
                     if ( IsBlocking( thProcessInfo.szExeFile, blockingProcessNames ) )
+                    {
                         newProcess.m_Flags |= ProcessInfo::FLAG_BLOCKING;
-                    m_Processes.Append( newProcess );
+                    }
+                    info = m_Processes.Append( newProcess );
+                }
+            }
+            // was it added or removed from the blocking pids ?
+            if (addedBlockingPid.Find(pid))
+            {
+                info->m_Flags |= ProcessInfo::FLAG_BLOCKING;
+            }
+            if (removedBlockingPid.Find(pid))
+            {
+                info->m_Flags &= ~ProcessInfo::FLAG_BLOCKING;
+            }
+            bool isBlocking = ( info->m_Flags & ProcessInfo::FLAG_BLOCKING ) != 0;
+            if ( wasBlocking != isBlocking )
+            {
+                if ( isBlocking )
+                {
+                    BlockingProcessInfo bpi;
+                    bpi.m_PID = pid;
+                    bpi.m_Name = thProcessInfo.szExeFile;
+                    m_BlockingProcesses.Append( bpi );
+                }
+                else
+                {
+                    m_BlockingProcesses.FindAndErase( pid );
                 }
             }
         }
@@ -453,10 +475,12 @@ void IdleDetection::UpdateProcessList( const Array<AString>& blockingProcessName
                 const uint32_t pid = strtoul( entry->d_name, nullptr, 10 );
 
                 ProcessInfo * info = m_Processes.Find( pid );
+                bool wasBlocking = false;
                 if ( info )
                 {
                     // an existing process that is still alive
                     info->m_AliveValue = sAliveValue; // still active
+                    wasBlocking = ( info->m_Flags & ProcessInfo::FLAG_BLOCKING ) != 0;
                 }
                 else
                 {
@@ -484,7 +508,7 @@ void IdleDetection::UpdateProcessList( const Array<AString>& blockingProcessName
                         newProcess.m_AliveValue = sAliveValue;
                         newProcess.m_LastTime = 0;
                         newProcess.m_Flags = ProcessInfo::FLAG_IN_OUR_HIERARCHY;
-                        m_Processes.Append( newProcess );
+                        info = m_Processes.Append( newProcess );
                     }
                     else
                     {
@@ -497,7 +521,32 @@ void IdleDetection::UpdateProcessList( const Array<AString>& blockingProcessName
                         const AString& exeName = tokens[ 1 ];
                         if ( IsBlocking( exeName.Get() + 1, blockingProcessNames ) )
                             newProcess.m_Flags |= ProcessInfo::FLAG_BLOCKING;
-                        m_Processes.Append( newProcess );
+                        info = m_Processes.Append( newProcess );
+                    }
+                }
+
+                // was it added or removed from the blocking pids ?
+                if ( addedBlockingPid.Find(pid) )
+                {
+                    info->m_Flags |= ProcessInfo::FLAG_BLOCKING;
+                }
+                if ( removedBlockingPid.Find(pid) )
+                {
+                    info->m_Flags &= ~ProcessInfo::FLAG_BLOCKING;
+                }
+                bool isBlocking = ( info->m_Flags & ProcessInfo::FLAG_BLOCKING ) != 0;
+                if ( wasBlocking != isBlocking )
+                {
+                    if ( isBlocking )
+                    {
+                        BlockingProcessInfo bpi;
+                        bpi.m_PID = pid;
+                        bpi.m_Name = thProcessInfo.szExeFile;
+                        m_BlockingProcesses.Append( bpi );
+                    }
+                    else
+                    {
+                        m_BlockingProcesses.FindAndErase( pid );
                     }
                 }
             }
@@ -514,33 +563,14 @@ void IdleDetection::UpdateProcessList( const Array<AString>& blockingProcessName
             if ( m_Processes[i].m_AliveValue != sAliveValue && ( m_Processes[i].m_Flags & ProcessInfo::FLAG_SELF ) == 0 )
             {
                 // dead process
+                if ( (m_Processes[i].m_Flags & ProcessInfo::FLAG_BLOCKING) != 0 )
+                {
+                    m_BlockingProcesses.FindAndErase(m_Processes[i].m_PID);
+                }
                 #if defined( __WINDOWS__ )
                     CloseHandle( m_Processes[ i ].m_ProcessHandle );
                 #endif
                 m_Processes.EraseIndex( i );
-            }
-        }
-    }
-    // handle blocking requests
-    if ( ! addedBlockingPid.IsEmpty() )
-    {
-        for ( uint32_t pid : addedBlockingPid )
-        {
-            ProcessInfo* info = m_Processes.Find(pid);
-            if (info)
-            {
-                info->m_Flags |= ProcessInfo::FLAG_BLOCKING;
-            }
-        }
-    }
-    if ( ! removedBlockingPid.IsEmpty() )
-    {
-        for ( uint32_t pid : removedBlockingPid )
-        {
-            ProcessInfo* info = m_Processes.Find(pid);
-            if (info)
-            {
-                info->m_Flags &= ~ProcessInfo::FLAG_BLOCKING;
             }
         }
     }

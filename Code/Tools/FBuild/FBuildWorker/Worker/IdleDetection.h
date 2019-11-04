@@ -28,13 +28,24 @@ public:
     inline bool IsIdle() const { return m_IsIdle; }
     inline float IsIdleFloat() const { return m_IsIdleFloat; }
     inline bool IsBlocked() const { return m_IsBlocked; }
-    size_t GetNumBlockingProcesses() const { return m_NumBlockingProcesses; }
+    uint32_t GetNumBlockingProcesses() const { return (uint32_t)m_BlockingProcesses.GetSize(); }
 
     // query status
     inline bool AddBlockingProcess(uint32_t pid);
     inline bool RemoveBlockingProcess(uint32_t pid);
     inline float GetCPUUsageFASTBuild() const { return m_CPUUsageFASTBuild; }
     inline float GetCPUUsageTotal() const { return m_CPUUsageTotal; }
+
+    struct BlockingProcessInfo
+    {
+        inline bool operator == ( uint32_t pid ) const { return m_PID == pid; }
+        inline bool operator < ( uint32_t pid ) const { return m_PID < pid; }
+        inline bool operator < ( const BlockingProcessInfo& b ) const { return m_PID < b.m_PID; }
+        uint32_t    m_PID;
+        AString     m_Name;
+    };
+
+    const SortedArray< BlockingProcessInfo >& GetBlockingProcesses() const { return m_BlockingProcesses; }
 
 private:
     // struct to track processes with
@@ -78,8 +89,8 @@ private:
     int32_t m_IdleSmoother;
     int32_t m_IdleFloatSmoother;
     bool    m_IsBlocked;
-    int32_t m_NumBlockingProcesses;
     SortedArray< ProcessInfo > m_Processes;
+    SortedArray< BlockingProcessInfo > m_BlockingProcesses;
     uint64_t m_LastTimeIdle;
     uint64_t m_LastTimeBusy;
 };

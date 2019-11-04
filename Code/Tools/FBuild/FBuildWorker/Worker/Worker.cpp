@@ -363,6 +363,14 @@ void Worker::UpdateUI()
             status += " (Low Disk Space)";
         }
     #endif
+    if ( m_IdleDetection.IsBlocked() )
+    {
+        status += " | Blocked by";
+        for ( const auto& bpi : m_IdleDetection.GetBlockingProcesses() )
+        {
+            status.AppendFormat(" %s(%u)", bpi.m_Name.Get(), bpi.m_PID);
+        }
+    }
     if ( InConsoleMode() )
     {
         status += '\n';
